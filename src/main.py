@@ -45,7 +45,7 @@ async def chat(request: ChatRequest):
         "thread_id": thread_id
     }
 
-@app.post("/plan/weekly")
+@app.get("/plan/weekly")
 async def weekly_plan():
     """Manually trigger weekly plan"""
     plan = await weekly_planning()
