@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -10,11 +11,18 @@ import traceback
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + "/.."))
 
 from src.agent import get_me_agent
-from src.workflows.weekly_plan import generate_weekly_plan
+from src.workflows.automation import start_scheduler, weekly_planning
 
 load_dotenv()
 
-app = FastAPI(title="AI Me - Wesley's Personal Agent")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+
+
+app = FastAPI(title="AI Me - Wesley's Personal Agent", lifespan=lifespan)
 
 class ChatRequest(BaseModel):
     message: str
@@ -39,13 +47,13 @@ async def chat(request: ChatRequest):
 
 @app.post("/plan/weekly")
 async def weekly_plan():
-    """Generate Sunday night planning summary"""
-    plan = generate_weekly_plan()
-    return {"weekly_plan": plan}
+    """Manually trigger weekly plan"""
+    plan = await weekly_planning()
+    return {"status": "Weekly plan generated", "plan": plan}
 
 @app.get("/")
 async def root():
-    return {"status": "✅ AI Me is running with memory", "message": "I now remember our conversations."}
+    return {"status": "✅ AI Me is running with automation", "message": "Daily briefing (7am) & weekly plan (Sun 8pm) active"}
 
 @app.get("/health")
 async def health():
