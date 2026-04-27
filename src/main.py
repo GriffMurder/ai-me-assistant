@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import sys
@@ -53,6 +54,11 @@ async def weekly_plan():
 
 @app.get("/")
 async def root():
+    """Serve the chat UI"""
+    return FileResponse("static/index.html")
+
+@app.get("/api")
+async def api_status():
     return {"status": "✅ AI Me is running with automation", "message": "Daily briefing (7am) & weekly plan (Sun 8pm) active"}
 
 @app.get("/health")
