@@ -23,6 +23,9 @@ def get_llm(model: str = "grok"):
     return ChatXAI(model="grok-4", temperature=0.3)
 
 
+_me_agent = None
+
+
 def build_me_agent():
     llm = get_llm("grok")
     tools = [get_schedule, search_emails, get_email_content, create_draft]
@@ -35,4 +38,8 @@ def build_me_agent():
     )
 
 
-me_agent = build_me_agent()
+def get_me_agent():
+    global _me_agent
+    if _me_agent is None:
+        _me_agent = build_me_agent()
+    return _me_agent

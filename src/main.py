@@ -7,7 +7,7 @@ import uuid
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + "/.."))
 
-from src.agent import me_agent
+from src.agent import get_me_agent
 from src.workflows.weekly_plan import generate_weekly_plan
 
 load_dotenv()
@@ -23,7 +23,7 @@ async def chat(request: ChatRequest):
     """Talk to your AI Me with memory"""
     thread_id = request.thread_id or str(uuid.uuid4())
 
-    result = me_agent.invoke(
+    result = get_me_agent().invoke(
         {"messages": [{"role": "user", "content": request.message}]},
         config={"configurable": {"thread_id": thread_id}}
     )
