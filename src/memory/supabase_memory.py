@@ -33,5 +33,9 @@ def get_checkpointer():
         open=True,
     )
     _checkpointer = PostgresSaver(_pool)
+    try:
+        _checkpointer.setup()
+    except Exception as e:
+        print(f"⚠️  Checkpointer setup skipped: {e}")
     print("✅ Using persistent Supabase checkpointer")
     return _checkpointer
