@@ -101,15 +101,21 @@ async def health():
     return status
 
 
+# Store pending OAuth flows by state so the callback can reuse the same object
+# (needed to carry the PKCE code_verifier across the redirect).
+_pending_flows: dict = {}
+
+
 @app.get("/auth/google")
 async def auth_google_start(request: Request):
     """Kick off Google OAuth. Visit this in a browser, click Allow, done."""
     flow = build_flow(_redirect_uri(request))
-    auth_url, _ = flow.authorization_url(
+    auth_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",  # force refresh_token issuance
     )
+    _pending_flows[state] = flow
     return RedirectResponse(auth_url)
 
 
@@ -117,7 +123,11 @@ async def auth_google_start(request: Request):
 async def auth_google_callback(request: Request):
     """Google redirects here after user clicks Allow. Saves token to Supabase."""
     try:
-        flow = build_flow(_redirect_uri(request))
+        state = request.query_params.get("state")
+        flow = _pending_flows.pop(state, None)
+        if flow is None:
+            # Fallback: build fresh flow (works if PKCE wasn't used)
+            flow = build_flow(_redirect_uri(request))
         flow.fetch_token(authorization_response=str(request.url))
         save_creds_from_flow(flow)
     except Exception as e:
