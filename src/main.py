@@ -64,17 +64,11 @@ async def api_status():
 @app.get("/health")
 async def health():
     """Check env vars and dependencies without invoking the agent"""
-    xai_key = os.getenv("XAI_API_KEY")
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    supabase_url = os.getenv("SUPABASE_URL")
-    db_url = os.getenv("SUPABASE_DB_URL")
-    return {
-        "XAI_API_KEY": "set" if xai_key else "MISSING",
-        "ANTHROPIC_API_KEY": "set" if anthropic_key else "MISSING",
-        "SUPABASE_URL": "set" if supabase_url else "MISSING",
-        "SUPABASE_DB_URL": "set" if db_url else "not set (using in-memory)",
-        "token.json": "present" if os.path.exists("token.json") else "MISSING (Google tools disabled)",
-    }
+    keys = ["XAI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+            "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_DB_URL"]
+    status = {k: ("set" if os.getenv(k) else "MISSING") for k in keys}
+    status["token.json"] = "present" if os.path.exists("token.json") else "MISSING (Google tools disabled)"
+    return status
 
 if __name__ == "__main__":
     import uvicorn
