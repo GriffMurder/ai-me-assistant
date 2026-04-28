@@ -9,6 +9,8 @@ import sys
 import os
 import uuid
 import traceback
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + "/.."))
 
@@ -22,6 +24,12 @@ load_dotenv()
 
 # Allow Google to return broader scopes than requested (adds openid/userinfo automatically)
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
+
+def _today_context() -> str:
+    """Prepend current date/time so the agent never hallucinates stale dates."""
+    now = datetime.now(ZoneInfo("America/Chicago"))
+    return f"[Today: {now.strftime('%A, %B %d, %Y')} — Central Time]\n"
 
 
 def _materialize_google_token():
@@ -69,7 +77,7 @@ async def chat(request: ChatRequest):
     thread_id = request.thread_id or str(uuid.uuid4())
     try:
         result = get_me_agent().invoke(
-            {"messages": [{"role": "user", "content": request.message}]},
+            {"messages": [{"role": "user", "content": _today_context() + request.message}]},
             config={"configurable": {"thread_id": thread_id}}
         )
     except Exception as e:
@@ -98,7 +106,7 @@ async def sms_webhook(request: Request):
         return {"status": "ignored"}
 
     result = get_me_agent().invoke(
-        {"messages": [{"role": "user", "content": incoming_message}]},
+        {"messages": [{"role": "user", "content": _today_context() + incoming_message}]},
         config={"configurable": {"thread_id": f"sms-{from_number}"}},
     )
     reply = result["messages"][-1].content

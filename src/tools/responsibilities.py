@@ -1,25 +1,49 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from langchain_core.tools import tool
+
+# Sacrament prep cycle: Wesley's turn every 3rd month
+_PREP_MONTHS = [1, 4, 7, 10]  # Jan, Apr, Jul, Oct
+
+
+def _next_sacrament_prep() -> str:
+    now = datetime.now(ZoneInfo("America/Chicago"))
+    for m in _PREP_MONTHS:
+        if m > now.month:
+            return datetime(now.year, m, 1).strftime("%B %Y")
+    return datetime(now.year + 1, _PREP_MONTHS[0], 1).strftime("%B %Y")
+
+
+def _week_range() -> str:
+    now = datetime.now(ZoneInfo("America/Chicago"))
+    monday = now - timedelta(days=now.weekday())
+    sunday = monday + timedelta(days=6)
+    return f"{monday.strftime('%b %d')} – {sunday.strftime('%b %d, %Y')}"
 
 
 @tool
 def get_my_responsibilities(persona: str = "all"):
-    """ALWAYS called when asked about responsibilities."""
-    return """WESLEY'S CURRENT RESPONSIBILITIES:
+    """Get Wesley's current responsibilities and status. Always call this first for any responsibilities or priorities question."""
+    now = datetime.now(ZoneInfo("America/Chicago"))
+    next_sac = _next_sacrament_prep()
+    week = _week_range()
 
-CHURCH (Branch President):
-• Interviews: Lagging — schedule minimum 2 this week
-• Sacrament: July (you did Jan & April)
-• Ministering: Follow up with at least 3 families
+    return f"""RESPONSIBILITIES — {now.strftime("%A, %B %d, %Y")} (Week: {week})
+
+CHURCH (Branch President — Batesville):
+• Interviews: Lagging — schedule at least 2 this week (priority #1)
+• Sacrament prep: Next turn = {next_sac}
+• Ministering: Follow up with at least 3 families this week
+• Meetings: Sunday after 12pm preferred. Avoid Wednesday if possible.
 
 PERSONAL:
-• 4 kids — block real family time (HIGH priority)
+• 4 kids — protect dedicated family time (HIGH priority)
 
 WORK:
-• Accounting/QuickBooks pending
+• Accounting / QuickBooks / Stripe (handle via TaskBullet)
 
-This week focus: Interviews + Ministering + Family Time"""
+This week focus: Interviews → Ministering → Family Time"""
 
 
 @tool

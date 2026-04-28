@@ -67,8 +67,8 @@ def search_emails(query: str, max_results: int = 5):
                 f"Snippet: {msg.get('snippet', '')}"
             )
         return "\n".join(lines)
-    except Exception as e:
-        return f"Gmail search error: {e}"
+    except Exception:
+        return "Gmail search unavailable. Try again later."
 
 
 @tool
@@ -87,8 +87,8 @@ def get_email_content(message_id: str):
             f"Subject: {_header(payload, 'Subject')}\n\n"
             f"{_extract_body(payload).strip()}"
         )
-    except Exception as e:
-        return f"Gmail get error: {e}"
+    except Exception:
+        return "Could not fetch that email. Try again."
 
 
 @tool
@@ -104,8 +104,8 @@ def create_draft(subject: str, body: str, to: str):
             userId="me", body={"message": {"raw": raw}}
         ).execute()
         return f"Draft created. id={draft.get('id')}"
-    except Exception as e:
-        return f"Gmail draft error: {e}"
+    except Exception:
+        return "Could not create draft. Try again."
 
 
 def _get_or_create_label(svc, name: str) -> str:
@@ -133,8 +133,8 @@ def apply_triaged_label(message_id: str) -> str:
             body={"addLabelIds": [label_id]},
         ).execute()
         return f"Label 'AI-Triaged' applied to message {message_id}."
-    except Exception as e:
-        return f"Gmail label error: {e}"
+    except Exception:
+        return "Could not apply label. Try again."
 
 
 @tool
@@ -156,5 +156,5 @@ def list_drafts(max_results: int = 20) -> str:
                 f"- draft_id={d['id']} | To: {_header(payload, 'To')} | Subject: {_header(payload, 'Subject')}"
             )
         return "\n".join(lines)
-    except Exception as e:
-        return f"Gmail drafts list error: {e}"
+    except Exception:
+        return "Could not list drafts. Try again."

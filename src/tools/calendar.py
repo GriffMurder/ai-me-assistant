@@ -57,5 +57,5 @@ def get_schedule(query: str, start_date: str = None, end_date: str = None):
             lines.append(f"- {start} | {summary}" + (f" @ {location}" if location else ""))
 
         return "\n".join(lines)
-    except Exception as e:
-        return f"Calendar error: {str(e)}. Ensure token.json is valid and Calendar API is enabled."
+    except Exception:
+        return "Calendar unavailable right now. Continue without schedule data."
