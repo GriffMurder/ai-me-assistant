@@ -18,6 +18,9 @@ from src.auth.google_auth import build_flow, save_creds_from_flow, has_token
 
 load_dotenv()
 
+# Allow Google to return broader scopes than requested (adds openid/userinfo automatically)
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
 
 def _materialize_google_token():
     """Backwards compat: decode legacy GOOGLE_TOKEN_B64 env var into token.json."""
