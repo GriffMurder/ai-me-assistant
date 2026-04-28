@@ -104,9 +104,8 @@ async def health():
     return status
 
 
-# Store pending OAuth flows by state so the callback can reuse the same object
-# (needed to carry the PKCE code_verifier across the redirect).
-_pending_flows: dict = {}
+OAUTH_STATE_COOKIE = "google_oauth_state"
+OAUTH_VERIFIER_COOKIE = "google_oauth_verifier"
 
 
 @app.get("/auth/google")
@@ -118,31 +117,48 @@ async def auth_google_start(request: Request):
         include_granted_scopes="true",
         prompt="consent",  # force refresh_token issuance
     )
-    _pending_flows[state] = flow
-    return RedirectResponse(auth_url)
+    response = RedirectResponse(auth_url)
+    # Persist OAuth state + PKCE verifier in cookies so callback works across instances.
+    response.set_cookie(OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, secure=True, samesite="lax")
+    response.set_cookie(OAUTH_VERIFIER_COOKIE, flow.code_verifier or "", max_age=600, httponly=True, secure=True, samesite="lax")
+    return response
 
 
 @app.get("/auth/google/callback")
 async def auth_google_callback(request: Request):
     """Google redirects here after user clicks Allow. Saves token to Supabase."""
     try:
-        state = request.query_params.get("state")
-        flow = _pending_flows.pop(state, None)
-        if flow is None:
-            # Fallback: build fresh flow (works if PKCE wasn't used)
-            flow = build_flow(_redirect_uri(request))
-        flow.fetch_token(authorization_response=str(request.url))
+        returned_state = request.query_params.get("state")
+        expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
+        code_verifier = request.cookies.get(OAUTH_VERIFIER_COOKIE)
+
+        if not returned_state or not expected_state or returned_state != expected_state:
+            raise RuntimeError("OAuth state mismatch. Start again at /auth/google")
+        if not code_verifier:
+            raise RuntimeError("Missing OAuth code verifier. Start again at /auth/google")
+
+        flow = build_flow(_redirect_uri(request))
+        flow.fetch_token(
+            authorization_response=str(request.url),
+            code_verifier=code_verifier,
+        )
         save_creds_from_flow(flow)
     except Exception as e:
-        return HTMLResponse(
+        response = HTMLResponse(
             f"<h2>OAuth failed</h2><pre>{traceback.format_exc()}</pre>",
             status_code=500,
         )
-    return HTMLResponse(
+        response.delete_cookie(OAUTH_STATE_COOKIE)
+        response.delete_cookie(OAUTH_VERIFIER_COOKIE)
+        return response
+    response = HTMLResponse(
         "<h2>✅ Google authorized.</h2>"
         "<p>Token saved to Supabase. Calendar + Gmail tools are live.</p>"
         "<p><a href='/'>Back to chat</a></p>"
     )
+    response.delete_cookie(OAUTH_STATE_COOKIE)
+    response.delete_cookie(OAUTH_VERIFIER_COOKIE)
+    return response
 
 if __name__ == "__main__":
     import uvicorn
