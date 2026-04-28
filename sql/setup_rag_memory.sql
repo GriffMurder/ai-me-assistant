@@ -1,11 +1,14 @@
 -- Run this once in your Supabase SQL Editor to enable RAG long-term memory.
+-- Safe to re-run; drops + recreates the table and function.
 
--- 1. Enable vector extension
+-- 1. Enable required extensions
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS "pgcrypto"; -- for gen_random_uuid()
 
--- 2. Personal memory table
-CREATE TABLE IF NOT EXISTS personal_memory (
-    id BIGSERIAL PRIMARY KEY,
+-- 2. Personal memory table (UUID id to match langchain SupabaseVectorStore)
+DROP TABLE IF EXISTS personal_memory CASCADE;
+CREATE TABLE personal_memory (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     content TEXT NOT NULL,
     metadata JSONB DEFAULT '{}',
     embedding VECTOR(1536),
@@ -22,7 +25,7 @@ CREATE OR REPLACE FUNCTION match_documents (
     match_count INT DEFAULT NULL,
     filter JSONB DEFAULT '{}'
 ) RETURNS TABLE (
-    id BIGINT,
+    id UUID,
     content TEXT,
     metadata JSONB,
     similarity FLOAT

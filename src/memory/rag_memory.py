@@ -2,20 +2,20 @@ from datetime import datetime
 import os
 
 from dotenv import load_dotenv
-from langchain_community.vectorstores import SupabaseVectorStore
 from langchain_openai import OpenAIEmbeddings
 from supabase import create_client
 
 load_dotenv()
 
-_vector_store = None
+_client = None
+_embeddings = None
 
 
-def _get_vector_store():
-    """Lazy init so missing env vars don't crash app startup."""
-    global _vector_store
-    if _vector_store is not None:
-        return _vector_store
+def _get_client():
+    """Lazy init Supabase client + embeddings."""
+    global _client, _embeddings
+    if _client is not None:
+        return _client, _embeddings
 
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -24,26 +24,32 @@ def _get_vector_store():
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY must be set for embeddings.")
 
-    client = create_client(supabase_url, supabase_key)
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-
-    _vector_store = SupabaseVectorStore(
-        client=client,
-        embedding=embeddings,
-        table_name="personal_memory",
-        query_name="match_documents",
-    )
-    return _vector_store
+    _client = create_client(supabase_url, supabase_key)
+    _embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    return _client, _embeddings
 
 
 def add_to_memory(content: str, metadata: dict = None):
     """Store important info about Wesley in long-term memory."""
+    client, embeddings = _get_client()
     if metadata is None:
         metadata = {"source": "user_input", "timestamp": datetime.utcnow().isoformat()}
-    _get_vector_store().add_texts([content], metadatas=[metadata])
+    vector = embeddings.embed_query(content)
+    client.table("personal_memory").insert({
+        "content": content,
+        "metadata": metadata,
+        "embedding": vector,
+    }).execute()
 
 
 def retrieve_relevant_memory(query: str, k: int = 6) -> str:
     """Retrieve most relevant past context for the current query."""
-    docs = _get_vector_store().similarity_search(query, k=k)
-    return "\n\n".join(doc.page_content for doc in docs)
+    client, embeddings = _get_client()
+    vector = embeddings.embed_query(query)
+    response = client.rpc("match_documents", {
+        "query_embedding": vector,
+        "match_count": k,
+        "filter": {},
+    }).execute()
+    rows = response.data or []
+    return "\n\n".join(row["content"] for row in rows)
