@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
+import base64
 import sys
 import os
 import uuid
@@ -17,8 +18,25 @@ from src.workflows.automation import start_scheduler, weekly_planning
 load_dotenv()
 
 
+def _materialize_google_token():
+    """If GOOGLE_TOKEN_B64 is set and token.json doesn't exist, decode it to disk."""
+    if os.path.exists("token.json"):
+        return
+    encoded = os.getenv("GOOGLE_TOKEN_B64")
+    if not encoded:
+        return
+    try:
+        decoded = base64.b64decode(encoded).decode("utf-8")
+        with open("token.json", "w") as f:
+            f.write(decoded)
+        print("✅ token.json materialized from GOOGLE_TOKEN_B64")
+    except Exception as e:
+        print(f"⚠️  Failed to materialize token.json: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _materialize_google_token()
     start_scheduler()
     yield
 
