@@ -5,25 +5,27 @@ from langchain_core.tools import tool
 
 @tool
 def get_my_responsibilities(persona: str = "all"):
-    """Return Wesley's current responsibilities and status across church, work, and personal personas."""
-    data = {
-        "church": {
-            "interviews": "Lagging - needs focus this week",
-            "sacrament": "Next prep: July",
-            "ministering": "Follow-up required",
-            "meetings": "Sunday after 12pm. Secretary manages schedule.",
-            "boundaries": "Avoid Wednesday if possible",
-        },
-        "work": {
-            "status": "QuickBooks/Stripe workflow pending (TaskBullet)",
-            "priority": "Medium",
-        },
-        "personal": {
-            "status": "4 kids - increase dedicated time",
-            "priority": "HIGH",
-        },
+    """Get Wesley's current responsibilities with specific this-week actions."""
+    today = datetime.now()
+
+    church_status = {
+        "interviews": "Lagging — schedule at least 2 this week",
+        "sacrament": "Next prep month: July (you last did April)",
+        "ministering": "Follow up with at least 3 families this week",
+        "meetings": "Sunday after 12pm is best. Avoid Wednesday if possible.",
     }
-    return data if persona == "all" else data.get(persona, data)
+
+    if persona.lower() == "church":
+        return f"CHURCH STATUS (as of {today.strftime('%b %d')}):\n{church_status}"
+    elif persona.lower() == "personal":
+        return "PERSONAL: 4 kids - protect dedicated family time this week (HIGH priority)"
+    elif persona.lower() == "work":
+        return "WORK: Accounting/QuickBooks/Stripe workflow pending (TaskBullet)"
+    else:
+        return f"""FULL STATUS (as of {today.strftime('%b %d')}):
+Church: Interviews lagging + ministering follow-up needed
+Personal: Spend more time with the 4 kids (HIGH priority)
+Work: Accounting/QuickBooks pending"""
 
 
 @tool
