@@ -106,3 +106,55 @@ def create_draft(subject: str, body: str, to: str):
         return f"Draft created. id={draft.get('id')}"
     except Exception as e:
         return f"Gmail draft error: {e}"
+
+
+def _get_or_create_label(svc, name: str) -> str:
+    """Return the id of a Gmail label, creating it if it doesn't exist."""
+    resp = svc.users().labels().list(userId="me").execute()
+    for lbl in resp.get("labels", []):
+        if lbl["name"].lower() == name.lower():
+            return lbl["id"]
+    new = svc.users().labels().create(
+        userId="me",
+        body={"name": name, "labelListVisibility": "labelShow", "messageListVisibility": "show"},
+    ).execute()
+    return new["id"]
+
+
+@tool
+def apply_triaged_label(message_id: str) -> str:
+    """Apply the 'AI-Triaged' Gmail label to a message so it is skipped in future triage runs."""
+    try:
+        svc = _service()
+        label_id = _get_or_create_label(svc, "AI-Triaged")
+        svc.users().messages().modify(
+            userId="me",
+            id=message_id,
+            body={"addLabelIds": [label_id]},
+        ).execute()
+        return f"Label 'AI-Triaged' applied to message {message_id}."
+    except Exception as e:
+        return f"Gmail label error: {e}"
+
+
+@tool
+def list_drafts(max_results: int = 20) -> str:
+    """List existing Gmail drafts (id, To, Subject). Use this before create_draft to avoid duplicates."""
+    try:
+        svc = _service()
+        resp = svc.users().drafts().list(userId="me", maxResults=max_results).execute()
+        drafts = resp.get("drafts", [])
+        if not drafts:
+            return "No existing drafts."
+        lines = []
+        for d in drafts:
+            detail = svc.users().drafts().get(
+                userId="me", id=d["id"], format="metadata"
+            ).execute()
+            payload = detail.get("message", {}).get("payload", {})
+            lines.append(
+                f"- draft_id={d['id']} | To: {_header(payload, 'To')} | Subject: {_header(payload, 'Subject')}"
+            )
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Gmail drafts list error: {e}"

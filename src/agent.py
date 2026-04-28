@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from src.memory.supabase_memory import get_checkpointer
 from src.memory.rag_memory import retrieve_relevant_memory, add_to_memory
 from src.tools.calendar import get_schedule
-from src.tools.email import search_emails, get_email_content, create_draft
+from src.tools.email import search_emails, get_email_content, create_draft, apply_triaged_label, list_drafts
 
 load_dotenv()
 
@@ -52,6 +52,8 @@ def build_me_agent():
         search_emails,
         get_email_content,
         create_draft,
+        apply_triaged_label,
+        list_drafts,
         recall_long_term_memory,
         save_long_term_memory,
     ]

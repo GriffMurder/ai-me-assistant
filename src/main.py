@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + "/.."))
 
 from src.agent import get_me_agent
 from src.workflows.automation import start_scheduler, weekly_planning
+from src.workflows.email_automation import manual_email_triage
 from src.auth.google_auth import build_flow, save_creds_from_flow, has_token
 
 load_dotenv()
@@ -77,6 +78,13 @@ async def chat(request: ChatRequest):
         "response": result["messages"][-1].content,
         "thread_id": thread_id
     }
+
+@app.post("/email/triage")
+async def trigger_email_triage():
+    """Manually trigger proactive inbox triage. Creates drafts for reply-needed emails."""
+    report = await manual_email_triage()
+    return {"status": "Email triage complete", "report": report}
+
 
 @app.get("/plan/weekly")
 async def weekly_plan():

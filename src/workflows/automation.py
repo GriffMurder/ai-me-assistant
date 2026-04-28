@@ -1,8 +1,10 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime
 
 from src.agent import get_me_agent
+from src.workflows.email_automation import proactive_email_triage
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -53,6 +55,19 @@ async def weekly_planning():
     return plan
 
 
+async def email_triage_job():
+    """Scheduled email triage — only runs during daytime hours (8am–8pm CT)."""
+    from zoneinfo import ZoneInfo
+    now_ct = datetime.now(ZoneInfo("America/Chicago"))
+    if not (8 <= now_ct.hour < 20):
+        print(f"📧 Email triage skipped (outside daytime window, {now_ct.strftime('%H:%M CT')})")
+        return
+    try:
+        await proactive_email_triage()
+    except Exception as e:
+        print(f"❌ Scheduled email triage error: {e}")
+
+
 def start_scheduler():
     """Start all background jobs"""
 
@@ -60,14 +75,26 @@ def start_scheduler():
     scheduler.add_job(
         morning_briefing,
         CronTrigger(hour=7, minute=0, timezone="America/Chicago"),
-        id="morning_briefing"
+        id="morning_briefing",
+        replace_existing=True,
     )
 
     # Sunday night weekly plan at 8:00 PM CDT
     scheduler.add_job(
         weekly_planning,
         CronTrigger(day_of_week="sun", hour=20, minute=0, timezone="America/Chicago"),
-        id="weekly_planning"
+        id="weekly_planning",
+        replace_existing=True,
+    )
+
+    # Proactive email triage every 6 hours (daytime CT gating inside job)
+    scheduler.add_job(
+        email_triage_job,
+        IntervalTrigger(hours=6),
+        id="email_triage",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
     )
 
     scheduler.start()
