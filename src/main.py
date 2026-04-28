@@ -16,6 +16,7 @@ from src.agent import get_me_agent
 from src.workflows.automation import start_scheduler, weekly_planning
 from src.workflows.email_automation import manual_email_triage
 from src.auth.google_auth import build_flow, save_creds_from_flow, has_token
+from src.tools.sms import send_sms
 
 load_dotenv()
 
@@ -84,6 +85,28 @@ async def trigger_email_triage():
     """Manually trigger proactive inbox triage. Creates drafts for reply-needed emails."""
     report = await manual_email_triage()
     return {"status": "Email triage complete", "report": report}
+
+
+@app.post("/sms")
+async def sms_webhook(request: Request):
+    """Twilio SMS webhook — receives an incoming text, runs the agent, replies via SMS."""
+    form = await request.form()
+    incoming_message = form.get("Body", "")
+    from_number = form.get("From", "")
+
+    if not incoming_message or not from_number:
+        return {"status": "ignored"}
+
+    result = get_me_agent().invoke(
+        {"messages": [{"role": "user", "content": incoming_message}]},
+        config={"configurable": {"thread_id": f"sms-{from_number}"}},
+    )
+    reply = result["messages"][-1].content
+
+    # Truncate to SMS limit (1600 chars to leave room for Twilio overhead)
+    send_sms(from_number, reply[:1600])
+
+    return {"status": "ok"}
 
 
 @app.get("/plan/weekly")
