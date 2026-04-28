@@ -1,37 +1,13 @@
 import base64
-import json
 from email.mime.text import MIMEText
-from pathlib import Path
 
 from dotenv import load_dotenv
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from langchain_core.tools import tool
 
+from src.auth.google_auth import load_creds as _load_creds
+
 load_dotenv()
-
-# Scopes we expect token.json to already cover.
-# NOTE: drafts.create needs gmail.compose or gmail.modify. Re-auth if you want drafts.
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/gmail.compose",
-    "https://www.googleapis.com/auth/gmail.modify",
-]
-
-
-def _load_creds():
-    token_path = Path("token.json")
-    if not token_path.exists():
-        raise FileNotFoundError("token.json not found. Complete OAuth first.")
-
-    data = json.loads(token_path.read_text())
-    creds = Credentials.from_authorized_user_info(data, SCOPES)
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        token_path.write_text(creds.to_json())
-    return creds
 
 
 def _service():

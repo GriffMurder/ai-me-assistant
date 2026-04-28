@@ -1,28 +1,11 @@
 from langchain_core.tools import tool
 from dotenv import load_dotenv
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta, timezone
-import json
-from pathlib import Path
+
+from src.auth.google_auth import load_creds as _load_creds
 
 load_dotenv()
-
-SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
-
-
-def _load_creds():
-    token_path = Path("token.json")
-    if not token_path.exists():
-        raise FileNotFoundError("token.json not found. Complete OAuth first.")
-
-    data = json.loads(token_path.read_text())
-    creds = Credentials.from_authorized_user_info(data, SCOPES)
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        token_path.write_text(creds.to_json())
-    return creds
 
 
 def get_calendar_tools():

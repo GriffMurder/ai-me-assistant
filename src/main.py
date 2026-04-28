@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -14,12 +14,13 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + "/.."))
 
 from src.agent import get_me_agent
 from src.workflows.automation import start_scheduler, weekly_planning
+from src.auth.google_auth import build_flow, save_creds_from_flow, has_token
 
 load_dotenv()
 
 
 def _materialize_google_token():
-    """If GOOGLE_TOKEN_B64 is set and token.json doesn't exist, decode it to disk."""
+    """Backwards compat: decode legacy GOOGLE_TOKEN_B64 env var into token.json."""
     if os.path.exists("token.json"):
         return
     encoded = os.getenv("GOOGLE_TOKEN_B64")
@@ -32,6 +33,16 @@ def _materialize_google_token():
         print("✅ token.json materialized from GOOGLE_TOKEN_B64")
     except Exception as e:
         print(f"⚠️  Failed to materialize token.json: {e}")
+
+
+def _redirect_uri(request: Request) -> str:
+    """Build the OAuth callback URL from the incoming request, honoring proxy headers."""
+    base = os.getenv("OAUTH_REDIRECT_BASE")  # optional override
+    if base:
+        return base.rstrip("/") + "/auth/google/callback"
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host"))
+    return f"{proto}://{host}/auth/google/callback"
 
 
 @asynccontextmanager
@@ -83,10 +94,42 @@ async def api_status():
 async def health():
     """Check env vars and dependencies without invoking the agent"""
     keys = ["XAI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
-            "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_DB_URL"]
+            "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_DB_URL",
+            "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]
     status = {k: ("set" if os.getenv(k) else "MISSING") for k in keys}
-    status["token.json"] = "present" if os.path.exists("token.json") else "MISSING (Google tools disabled)"
+    status["google_token"] = "present" if has_token() else "MISSING (visit /auth/google to authorize)"
     return status
+
+
+@app.get("/auth/google")
+async def auth_google_start(request: Request):
+    """Kick off Google OAuth. Visit this in a browser, click Allow, done."""
+    flow = build_flow(_redirect_uri(request))
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent",  # force refresh_token issuance
+    )
+    return RedirectResponse(auth_url)
+
+
+@app.get("/auth/google/callback")
+async def auth_google_callback(request: Request):
+    """Google redirects here after user clicks Allow. Saves token to Supabase."""
+    try:
+        flow = build_flow(_redirect_uri(request))
+        flow.fetch_token(authorization_response=str(request.url))
+        save_creds_from_flow(flow)
+    except Exception as e:
+        return HTMLResponse(
+            f"<h2>OAuth failed</h2><pre>{traceback.format_exc()}</pre>",
+            status_code=500,
+        )
+    return HTMLResponse(
+        "<h2>✅ Google authorized.</h2>"
+        "<p>Token saved to Supabase. Calendar + Gmail tools are live.</p>"
+        "<p><a href='/'>Back to chat</a></p>"
+    )
 
 if __name__ == "__main__":
     import uvicorn
