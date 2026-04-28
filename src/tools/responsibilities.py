@@ -5,22 +5,21 @@ from langchain_core.tools import tool
 
 @tool
 def get_my_responsibilities(persona: str = "all"):
-    """ALWAYS use this when Wesley asks about responsibilities or what needs attention."""
-    return """CURRENT RESPONSIBILITIES (Wesley-specific):
+    """ALWAYS called when asked about responsibilities."""
+    return """WESLEY'S CURRENT RESPONSIBILITIES:
 
 CHURCH (Branch President):
-• Interviews: Lagging — schedule at least 2 this week
-• Sacrament Prep: Next turn = July
-• Ministering: Follow-up needed on at least 3 families
-• Meetings: Sunday after 12pm preferred
+• Interviews: Lagging — schedule minimum 2 this week
+• Sacrament: July (you did Jan & April)
+• Ministering: Follow up with at least 3 families
 
 PERSONAL:
-• 4 kids — protect dedicated family time (HIGH priority)
+• 4 kids — block real family time (HIGH priority)
 
 WORK:
-• Accounting / QuickBooks flow pending
+• Accounting/QuickBooks pending
 
-This Week Priority: Interviews + Ministering + Family Time"""
+This week focus: Interviews + Ministering + Family Time"""
 
 
 @tool
