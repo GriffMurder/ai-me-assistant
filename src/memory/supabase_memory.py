@@ -8,10 +8,20 @@ SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
 
 _cm = None
 _checkpointer = None
-_setup_done = False
+
+
+def _conn_string() -> str:
+    """Append prepare_threshold=0 so psycopg3 never uses prepared statements.
+    Required when Supabase routes through PgBouncer in transaction mode."""
+    url = SUPABASE_DB_URL
+    sep = "&" if "?" in url else "?"
+    if "prepare_threshold" not in url:
+        url = f"{url}{sep}prepare_threshold=0"
+    return url
+
 
 def get_checkpointer():
-    global _cm, _checkpointer, _setup_done
+    global _cm, _checkpointer
     if _checkpointer is not None:
         return _checkpointer
 
@@ -20,9 +30,8 @@ def get_checkpointer():
         from langgraph.checkpoint.memory import MemorySaver
         _checkpointer = MemorySaver()
         return _checkpointer
-    
-    _cm = PostgresSaver.from_conn_string(SUPABASE_DB_URL)
+
+    _cm = PostgresSaver.from_conn_string(_conn_string())
     _checkpointer = _cm.__enter__()
-    # Skip setup() - tables should already exist or will be created on first use
     print("✅ Using persistent Supabase checkpointer")
     return _checkpointer
