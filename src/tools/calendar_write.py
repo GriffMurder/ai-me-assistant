@@ -22,6 +22,7 @@ def create_calendar_event(
     end_time: str = "",
     description: str = "",
     location: str = "",
+    calendar_id: str = "primary",
 ) -> str:
     """Create a new event on Wesley's Google Calendar.
 
@@ -31,6 +32,8 @@ def create_calendar_event(
         end_time: End time in same format. Defaults to start_time + 1 hour if omitted.
         description: Optional notes or agenda.
         location: Optional location string.
+        calendar_id: Calendar to create the event on. Defaults to 'primary'.
+                     Use a calendar email (e.g. 'wes@taskbullet.com') for secondary calendars.
     """
     try:
         resolved_end = end_time.strip() if end_time.strip() else _parse_and_offset(start_time, offset_hours=1)
@@ -45,7 +48,7 @@ def create_calendar_event(
 
         creds = _load_creds()
         service = build("calendar", "v3", credentials=creds, cache_discovery=False)
-        created = service.events().insert(calendarId="primary", body=event_body).execute()
+        created = service.events().insert(calendarId=calendar_id, body=event_body).execute()
 
         event_link = created.get("htmlLink", "")
         return f"✅ Event created: '{summary}' on {start_time} → {resolved_end}" + (
