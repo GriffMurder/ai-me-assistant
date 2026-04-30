@@ -14,5 +14,7 @@ services:
         sync: false
       - key: GOOGLE_CREDENTIALS_PATH
         value: credentials.json
+      - key: APP_PASSWORD
+        sync: false
       - key: PYTHON_VERSION
         value: 3.12.3

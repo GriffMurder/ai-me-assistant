@@ -113,14 +113,54 @@
     padding: 6px 10px;
   }
   .actions button:hover { color: var(--text); }
+  /* Password gate overlay */
+  #gate {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  #gate.hidden { display: none; }
+  .gate-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px 28px;
+    width: 100%; max-width: 360px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .gate-box h2 { margin: 0; font-size: 18px; }
+  .gate-box p  { margin: 0; color: var(--muted); font-size: 13px; }
+  .gate-box input {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    font: inherit;
+    outline: none;
+  }
+  .gate-box input:focus { border-color: var(--accent); }
+  .gate-box .gate-err { color: #ffb4b4; font-size: 13px; min-height: 18px; }
 </style>
 </head>
 <body>
+<div id="gate">
+  <div class="gate-box">
+    <h2>🔒 AI Me</h2>
+    <p>Enter your password to continue.</p>
+    <input id="gate-pw" type="password" placeholder="Password" autofocus />
+    <button id="gate-btn">Unlock</button>
+    <div class="gate-err" id="gate-err"></div>
+  </div>
+</div>
+
 <header>
   <h1>🤖 AI Me — Wesley</h1>
   <div class="actions">
     <span class="status" id="status">thread: <span id="tid">—</span></span>
     <button onclick="newThread()">New chat</button>
+    <button onclick="logout()">Logout</button>
   </div>
 </header>
 
@@ -132,6 +172,56 @@
 </form>
 
 <script>
+  // --- Auth gate ---
+  const gate    = document.getElementById("gate");
+  const gatePw  = document.getElementById("gate-pw");
+  const gateBtn = document.getElementById("gate-btn");
+  const gateErr = document.getElementById("gate-err");
+
+  let authToken = sessionStorage.getItem("aime_token");
+  if (authToken) gate.classList.add("hidden");
+
+  async function tryUnlock() {
+    const pw = gatePw.value.trim();
+    if (!pw) return;
+    gateBtn.disabled = true;
+    gateErr.textContent = "";
+    // Probe /health/full — a 200 confirms the password is correct.
+    try {
+      const res = await fetch("/health/full", {
+        headers: { "Authorization": "Bearer " + pw }
+      });
+      if (res.ok) {
+        sessionStorage.setItem("aime_token", pw);
+        authToken = pw;
+        gate.classList.add("hidden");
+        addMsg("bot", "Hey, I'm Me — Wesley's AI twin. Ask me about your schedule, emails, or anything else.");
+      } else {
+        gateErr.textContent = "Wrong password.";
+        gatePw.value = "";
+        gatePw.focus();
+      }
+    } catch (e) {
+      gateErr.textContent = "Network error — try again.";
+    } finally {
+      gateBtn.disabled = false;
+    }
+  }
+
+  gateBtn.addEventListener("click", tryUnlock);
+  gatePw.addEventListener("keydown", (e) => { if (e.key === "Enter") tryUnlock(); });
+
+  function logout() {
+    sessionStorage.removeItem("aime_token");
+    authToken = null;
+    chat.innerHTML = "";
+    gatePw.value = "";
+    gateErr.textContent = "";
+    gate.classList.remove("hidden");
+    gatePw.focus();
+  }
+
+  // --- Chat ---
   const chat = document.getElementById("chat");
   const form = document.getElementById("form");
   const input = document.getElementById("input");
@@ -179,12 +269,18 @@
     try {
       const res = await fetch("/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + authToken,
+        },
         body: JSON.stringify({ message: text, thread_id: threadId }),
       });
       const data = await res.json();
       typing.remove();
-      if (!res.ok) {
+      if (res.status === 401) {
+        logout();
+        addMsg("error", "Session expired. Please log in again.");
+      } else if (!res.ok) {
         addMsg("error", "Error: " + (data.detail?.error || JSON.stringify(data)));
       } else {
         addMsg("bot", data.response);
@@ -198,7 +294,7 @@
     }
   });
 
-  addMsg("bot", "Hey, I'm Me — Wesley's AI twin. Ask me about your schedule, emails, or anything else.");
+  if (authToken) addMsg("bot", "Hey, I'm Me — Wesley's AI twin. Ask me about your schedule, emails, or anything else.");
 </script>
 </body>
 </html>

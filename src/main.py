@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -16,6 +16,7 @@ from src.agent import get_me_agent
 from src.workflows.email_automation import manual_email_triage
 from src.auth.google_auth import build_flow, save_creds_from_flow, has_token
 from src.tools.sms import send_sms
+from src.utils.security import verify_owner, verify_twilio
 
 load_dotenv()
 
@@ -66,7 +67,7 @@ class ChatRequest(BaseModel):
     message: str
     thread_id: str = None  # For memory persistence
 
-@app.post("/chat")
+@app.post("/chat", dependencies=[Depends(verify_owner)])
 async def chat(request: ChatRequest):
     """Talk to your AI Me with memory"""
     thread_id = request.thread_id or str(uuid.uuid4())
@@ -83,16 +84,18 @@ async def chat(request: ChatRequest):
         "thread_id": thread_id
     }
 
-@app.post("/email/triage")
+@app.post("/email/triage", dependencies=[Depends(verify_owner)])
 async def trigger_email_triage():
     """Manually trigger proactive inbox triage. Creates drafts for reply-needed emails."""
     report = await manual_email_triage()
     return {"status": "Email triage complete", "report": report}
 
 
-@app.post("/sms")
+@app.post("/sms", dependencies=[Depends(verify_twilio)])
 async def sms_webhook(request: Request):
     """Twilio SMS webhook — receives an incoming text, runs the agent, replies via SMS."""
+    # Note: verify_twilio already consumed and validated the form body.
+    # Re-read it here (FastAPI caches the form parse within the request lifetime).
     form = await request.form()
     incoming_message = form.get("Body", "")
     from_number = form.get("From", "")
@@ -112,7 +115,7 @@ async def sms_webhook(request: Request):
     return {"status": "ok"}
 
 
-@app.get("/plan/weekly")
+@app.get("/plan/weekly", dependencies=[Depends(verify_owner)])
 async def weekly_plan():
     """Manually trigger weekly plan"""
     try:
@@ -133,12 +136,18 @@ async def api_status():
 
 @app.get("/health")
 async def health():
-    """Check env vars and dependencies without invoking the agent"""
+    """Public health check — minimal to avoid leaking config info."""
+    return {"status": "ok"}
+
+
+@app.get("/health/full", dependencies=[Depends(verify_owner)])
+async def health_full():
+    """Full diagnostics — owner only."""
     keys = ["XAI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
             "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_DB_URL",
             "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
             "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER",
-            "MY_PHONE_NUMBER"]
+            "MY_PHONE_NUMBER", "APP_PASSWORD"]
     status = {k: ("set" if os.getenv(k) else "MISSING") for k in keys}
     status["google_token"] = "present" if has_token() else "MISSING (visit /auth/google to authorize)"
     try:
