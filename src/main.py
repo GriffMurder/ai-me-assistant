@@ -137,9 +137,16 @@ async def health():
     """Check env vars and dependencies without invoking the agent"""
     keys = ["XAI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
             "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_DB_URL",
-            "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]
+            "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
+            "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER",
+            "MY_PHONE_NUMBER"]
     status = {k: ("set" if os.getenv(k) else "MISSING") for k in keys}
     status["google_token"] = "present" if has_token() else "MISSING (visit /auth/google to authorize)"
+    try:
+        import twilio  # noqa: F401
+        status["twilio_module"] = "installed"
+    except ImportError:
+        status["twilio_module"] = "MISSING"
     return status
 
 
