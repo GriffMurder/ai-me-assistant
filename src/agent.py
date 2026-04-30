@@ -1,5 +1,9 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from langchain_xai import ChatXAI
 from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from dotenv import load_dotenv
@@ -31,7 +35,7 @@ Rules:
 - Keep replies short and actionable.
 - Use this structure for priority questions: **Status | This Week Priorities | Actions | Risks**
 - Be protective of time and energy. Flag real problems.
-- If a tool returns an error, note it in one sentence and continue with what you know."""
+- On tool error: state the failure briefly, then answer from what you know. Do not quote or repeat the user's message."""
 
 
 @tool
@@ -45,6 +49,13 @@ def save_long_term_memory(fact: str) -> str:
     """Save an important lasting fact about Wesley to long-term memory (preferences, decisions, people, projects)."""
     add_to_memory(fact, metadata={"source": "agent_save"})
     return f"Saved: {fact}"
+
+
+def _dynamic_prompt(state: dict) -> list:
+    """Inject current date into system prompt at runtime without persisting it to thread history."""
+    now = datetime.now(ZoneInfo("America/Chicago"))
+    date_str = now.strftime("%A, %B %d, %Y — Central Time")
+    return [SystemMessage(content=SYSTEM_PROMPT + f"\n\nToday: {date_str}")] + state["messages"]
 
 
 def get_llm(model: str = "grok"):
@@ -77,7 +88,7 @@ def build_me_agent():
     return create_react_agent(
         llm,
         tools,
-        prompt=SYSTEM_PROMPT,
+        prompt=_dynamic_prompt,
         checkpointer=get_checkpointer(),
     )
 
