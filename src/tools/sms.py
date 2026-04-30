@@ -1,7 +1,6 @@
 import os
 
 from dotenv import load_dotenv
-from twilio.rest import Client
 
 load_dotenv()
 
@@ -9,6 +8,8 @@ load_dotenv()
 def send_sms(to: str, body: str) -> str | None:
     """Send an SMS from Wesley's Twilio number. Returns the message SID or None on failure."""
     try:
+        from twilio.rest import Client
+
         client = Client(
             os.getenv("TWILIO_ACCOUNT_SID"),
             os.getenv("TWILIO_AUTH_TOKEN"),

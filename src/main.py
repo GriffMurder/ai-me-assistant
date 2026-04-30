@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + "/.."))
 
 from src.agent import get_me_agent
-from src.workflows.automation import start_scheduler, weekly_planning
+from src.workflows.automation import start_scheduler, send_weekly_plan
 from src.workflows.email_automation import manual_email_triage
 from src.auth.google_auth import build_flow, save_creds_from_flow, has_token
 from src.tools.sms import send_sms
@@ -120,7 +120,7 @@ async def sms_webhook(request: Request):
 @app.get("/plan/weekly")
 async def weekly_plan():
     """Manually trigger weekly plan"""
-    plan = await weekly_planning()
+    plan = await send_weekly_plan()
     return {"status": "Weekly plan generated", "plan": plan}
 
 @app.get("/")
