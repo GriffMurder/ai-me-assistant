@@ -2,8 +2,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime
+import os
 
 from src.agent import get_me_agent
+from src.tools.sms import send_sms
 from src.workflows.email_automation import proactive_email_triage
 from dotenv import load_dotenv
 
@@ -12,8 +14,8 @@ load_dotenv()
 scheduler = AsyncIOScheduler()
 
 
-async def morning_briefing():
-    """Runs every morning — daily AI summary"""
+async def send_morning_briefing():
+    """Runs every morning at 7:00 AM CDT — generates and SMS-delivers daily briefing."""
     print(f"🌅 Running Morning Briefing - {datetime.now()}")
 
     prompt = """Run a full morning briefing for Wesley:
@@ -30,12 +32,19 @@ async def morning_briefing():
 
     briefing = result["messages"][-1].content
     print("📋 Morning Briefing:\n", briefing)
-    # TODO: Send via email or Twilio SMS
+
+    my_phone = os.getenv("MY_PHONE_NUMBER")
+    if my_phone:
+        send_sms(my_phone, f"🌅 Good morning Wesley\n\n{briefing}")
+        print("✅ Morning briefing sent via SMS")
+    else:
+        print("⚠️ MY_PHONE_NUMBER not set — briefing not delivered")
+
     return briefing
 
 
-async def weekly_planning():
-    """Runs every Sunday night"""
+async def send_weekly_plan():
+    """Runs every Sunday at 8:00 PM CDT — generates and SMS-delivers weekly plan."""
     print(f"📅 Running Weekly Planning - {datetime.now()}")
 
     prompt = """Create Wesley's full weekly plan:
@@ -52,6 +61,14 @@ async def weekly_planning():
 
     plan = result["messages"][-1].content
     print("📅 Weekly Plan Generated:\n", plan)
+
+    my_phone = os.getenv("MY_PHONE_NUMBER")
+    if my_phone:
+        send_sms(my_phone, f"📅 Weekly Plan\n\n{plan}")
+        print("✅ Weekly plan sent via SMS")
+    else:
+        print("⚠️ MY_PHONE_NUMBER not set — weekly plan not delivered")
+
     return plan
 
 
@@ -73,7 +90,7 @@ def start_scheduler():
 
     # Daily morning briefing at 7:00 AM CDT
     scheduler.add_job(
-        morning_briefing,
+        send_morning_briefing,
         CronTrigger(hour=7, minute=0, timezone="America/Chicago"),
         id="morning_briefing",
         replace_existing=True,
@@ -81,7 +98,7 @@ def start_scheduler():
 
     # Sunday night weekly plan at 8:00 PM CDT
     scheduler.add_job(
-        weekly_planning,
+        send_weekly_plan,
         CronTrigger(day_of_week="sun", hour=20, minute=0, timezone="America/Chicago"),
         id="weekly_planning",
         replace_existing=True,
@@ -98,4 +115,4 @@ def start_scheduler():
     )
 
     scheduler.start()
-    print("⏰ Background automation scheduler started!")
+    print("⏰ Automation scheduler started with SMS delivery!")
