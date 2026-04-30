@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from src.memory.supabase_memory import get_checkpointer
 from src.memory.rag_memory import retrieve_relevant_memory, add_to_memory
 from src.tools.calendar import get_schedule
+from src.tools.calendar_write import create_calendar_event
 from src.tools.email import search_emails, get_email_content, create_draft, apply_triaged_label, list_drafts
 from src.tools.responsibilities import get_my_responsibilities, log_interview, log_ministering, protect_family_time
 
@@ -59,6 +60,7 @@ def build_me_agent():
     llm = get_llm("grok")
     tools = [
         get_schedule,
+        create_calendar_event,
         search_emails,
         get_email_content,
         create_draft,
