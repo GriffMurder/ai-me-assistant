@@ -13,7 +13,6 @@ import traceback
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + "/.."))
 
 from src.agent import get_me_agent
-from src.workflows.automation import start_scheduler, send_weekly_plan
 from src.workflows.email_automation import manual_email_triage
 from src.auth.google_auth import build_flow, save_creds_from_flow, has_token
 from src.tools.sms import send_sms
@@ -53,7 +52,11 @@ def _redirect_uri(request: Request) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _materialize_google_token()
-    start_scheduler()
+    try:
+        from src.workflows.automation import start_scheduler
+        start_scheduler()
+    except Exception as e:
+        print(f"⚠️  Scheduler disabled during startup: {e}")
     yield
 
 
@@ -98,7 +101,7 @@ async def sms_webhook(request: Request):
         return {"status": "ignored"}
 
     result = get_me_agent().invoke(
-        {"messages": [{"role": "user", "content": _today_context() + incoming_message}]},
+        {"messages": [{"role": "user", "content": incoming_message}]},
         config={"configurable": {"thread_id": f"sms-{from_number}"}},
     )
     reply = result["messages"][-1].content
@@ -112,6 +115,10 @@ async def sms_webhook(request: Request):
 @app.get("/plan/weekly")
 async def weekly_plan():
     """Manually trigger weekly plan"""
+    try:
+        from src.workflows.automation import send_weekly_plan
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Weekly planner unavailable: {e}")
     plan = await send_weekly_plan()
     return {"status": "Weekly plan generated", "plan": plan}
 
