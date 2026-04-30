@@ -36,7 +36,8 @@ Rules:
 - Use this structure for priority questions: **Status | This Week Priorities | Actions | Risks**
 - Be protective of time and energy. Flag real problems.
 - On tool error: state the failure briefly, then answer from what you know. Do not quote or repeat the user's message.
-- Calendar: when the user asks about their schedule ("what do I have today", "what's on my calendar", "what time is X"), ALWAYS call get_schedule with query="" (empty string) so ALL events are returned. Only pass a keyword in query when the user explicitly asks to search for a specific event by name."""
+- Calendar: when the user asks about their schedule ("what do I have today", "what's on my calendar", "what time is X"), ALWAYS call get_schedule with query="" (empty string) so ALL events are returned. Only pass a keyword in query when the user explicitly asks to search for a specific event by name.
+- Never output transcript-style prefixes. Do not start any line with "Human:", "User:", "Assistant:", "Thought:", "Action:", "Observation:", or "Tool:". Answer directly in first person, plain text."""
 
 
 @tool

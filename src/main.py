@@ -5,10 +5,19 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import base64
+import re
 import sys
 import os
 import uuid
 import traceback
+
+_TRANSCRIPT_PREFIX = re.compile(r'^(Human|User|Assistant|Thought|Action|Observation|Tool)\s*:\s*', re.IGNORECASE)
+
+def _sanitize_response(text: str) -> str:
+    """Strip any transcript-style prefix lines the model accidentally emits."""
+    lines = text.splitlines()
+    clean = [l for l in lines if not _TRANSCRIPT_PREFIX.match(l)]
+    return "\n".join(clean).strip()
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + "/.."))
 
@@ -80,7 +89,7 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail={"error": str(e), "trace": traceback.format_exc()})
 
     return {
-        "response": result["messages"][-1].content,
+        "response": _sanitize_response(result["messages"][-1].content),
         "thread_id": thread_id
     }
 
