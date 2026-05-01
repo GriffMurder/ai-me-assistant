@@ -1,4 +1,5 @@
 import os
+from datetime import timezone
 
 from dotenv import load_dotenv
 from github import Github
@@ -8,6 +9,7 @@ load_dotenv()
 
 _github = Github(os.getenv("GITHUB_TOKEN"))
 _README_CHARS = 2000
+_OVERVIEW_LIMIT = 20
 
 
 @tool
@@ -69,3 +71,38 @@ def analyze_repo(repo_name: str, question: str) -> str:
         )
     except Exception as e:
         return f"❌ Failed to analyze repo '{repo_name}': {e}"
+
+
+@tool
+def repo_overview() -> str:
+    """Give a health summary of all Wesley's GitHub repos — last activity, language, open issues.
+
+    Use this for weekly 'state of my apps' questions. For deep-diving into a
+    single repo, use analyze_repo instead.
+    """
+    try:
+        owner = os.getenv("GITHUB_USERNAME")
+        if not owner:
+            return "❌ GITHUB_USERNAME env var not set."
+
+        user = _github.get_user(owner)
+        repos = list(user.get_repos(sort="pushed", direction="desc"))[:_OVERVIEW_LIMIT]
+
+        if not repos:
+            return "No repositories found."
+
+        lines = ["| Repo | Lang | Last Push | Open Issues | Description |",
+                 "|------|------|-----------|-------------|-------------|"]
+        for repo in repos:
+            pushed = repo.pushed_at.strftime("%b %d, %Y") if repo.pushed_at else "—"
+            lang = repo.language or "—"
+            desc = (repo.description or "")[:60]
+            issues = repo.open_issues_count
+            lines.append(f"| {repo.name} | {lang} | {pushed} | {issues} | {desc} |")
+
+        return (
+            f"## GitHub Repo Overview ({len(repos)} repos, sorted by recent activity)\n\n"
+            + "\n".join(lines)
+        )
+    except Exception as e:
+        return f"❌ Failed to load repo overview: {e}"

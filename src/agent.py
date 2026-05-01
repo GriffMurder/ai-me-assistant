@@ -13,10 +13,11 @@ from src.memory.rag_memory import retrieve_relevant_memory, add_to_memory
 from src.tools.calendar import get_schedule
 from src.tools.calendar_write import create_calendar_event
 from src.tools.email import search_emails, get_email_content, create_draft, create_draft_for_approval, apply_triaged_label, list_drafts
-from src.tools.responsibilities import get_my_responsibilities, log_interview, log_ministering, protect_family_time
+from src.tools.responsibilities import get_my_responsibilities, log_interview, log_ministering, protect_family_time, suggest_family_time
 from src.tools.reminders import set_reminder
 from src.tools.google_docs import read_google_doc
-from src.tools.github import analyze_repo
+from src.tools.github import analyze_repo, repo_overview
+from src.tools.work import get_work_priorities
 
 load_dotenv()
 
@@ -35,6 +36,7 @@ You manage 3 personas that reference each other but never mix:
 
 Rules:
 - Always call get_my_responsibilities first for any responsibilities or priorities question.
+- For work/QuickBooks-specific priorities, use get_work_priorities. For overall life priorities, use get_my_responsibilities.
 - Keep replies short and actionable.
 - Use this structure for priority questions: **Status | This Week Priorities | Actions | Risks**
 - Be protective of time and energy. Flag real problems.
@@ -90,6 +92,9 @@ def build_me_agent():
         set_reminder,
         read_google_doc,
         analyze_repo,
+        repo_overview,
+        get_work_priorities,
+        suggest_family_time,
         recall_long_term_memory,
         save_long_term_memory,
     ]
