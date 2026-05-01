@@ -80,6 +80,7 @@ pydantic==2.13.3
 pydantic-settings==2.14.0
 pydantic_core==2.46.3
 pyiceberg==0.11.1
+PyGithub==2.6.1
 PyJWT==2.12.1
 pyparsing==3.3.2
 pyroaring==1.1.0
