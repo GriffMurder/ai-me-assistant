@@ -1,7 +1,17 @@
+import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from dotenv import load_dotenv
 from langchain_core.tools import tool
+from supabase import create_client
+
+load_dotenv()
+
+_supabase = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY"),
+)
 
 # Sacrament prep cycle: Wesley's turn every 3rd month
 _PREP_MONTHS = [1, 4, 7, 10]  # Jan, Apr, Jul, Oct
@@ -49,13 +59,30 @@ This week focus: Interviews → Ministering → Family Time"""
 @tool
 def log_interview(member_name: str, type_of_interview: str, notes: str = ""):
     """Log a completed worthiness interview for a branch member."""
-    return f"Interview logged: {member_name} ({type_of_interview}) on {datetime.now().strftime('%b %d')}"
+    details = f"{type_of_interview}. {notes}".strip(". ") if notes else type_of_interview
+    try:
+        _supabase.table("responsibilities_logs").insert({
+            "type": "interview",
+            "target": member_name,
+            "details": details,
+        }).execute()
+    except Exception as e:
+        return f"❌ Failed to log interview: {e}"
+    return f"✅ Interview logged for {member_name} ({type_of_interview}) on {datetime.now(ZoneInfo('America/Chicago')).strftime('%b %d')}"
 
 
 @tool
 def log_ministering(family: str, action_taken: str):
     """Log a ministering follow-up action for a family."""
-    return f"Ministering logged for {family}: {action_taken}"
+    try:
+        _supabase.table("responsibilities_logs").insert({
+            "type": "ministering",
+            "target": family,
+            "details": action_taken,
+        }).execute()
+    except Exception as e:
+        return f"❌ Failed to log ministering: {e}"
+    return f"✅ Ministering logged for {family}: {action_taken}"
 
 
 @tool

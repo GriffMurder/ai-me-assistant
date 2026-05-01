@@ -1,4 +1,5 @@
 import base64
+import os
 from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
@@ -6,6 +7,7 @@ from googleapiclient.discovery import build
 from langchain_core.tools import tool
 
 from src.auth.google_auth import load_creds as _load_creds
+from src.tools.sms import send_sms
 
 load_dotenv()
 
@@ -95,17 +97,23 @@ def get_email_content(message_id: str):
 def create_draft(subject: str, body: str, to: str):
     """Create a Gmail draft (does NOT send). Requires gmail.compose or gmail.modify scope."""
     try:
-        svc = _service()
-        message = MIMEText(body)
-        message["to"] = to
-        message["subject"] = subject
-        raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
-        draft = svc.users().drafts().create(
-            userId="me", body={"message": {"raw": raw}}
-        ).execute()
-        return f"Draft created. id={draft.get('id')}"
+        draft_id = _create_gmail_draft(to, subject, body)
+        return f"Draft created. id={draft_id}"
     except Exception:
         return "Could not create draft. Try again."
+
+
+def _create_gmail_draft(to: str, subject: str, body: str) -> str:
+    """Internal helper: create a Gmail draft and return the raw draft id."""
+    svc = _service()
+    message = MIMEText(body)
+    message["to"] = to
+    message["subject"] = subject
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+    draft = svc.users().drafts().create(
+        userId="me", body={"message": {"raw": raw}}
+    ).execute()
+    return draft["id"]
 
 
 def _get_or_create_label(svc, name: str) -> str:
@@ -141,20 +149,64 @@ def apply_triaged_label(message_id: str) -> str:
 def list_drafts(max_results: int = 20) -> str:
     """List existing Gmail drafts (id, To, Subject). Use this before create_draft to avoid duplicates."""
     try:
-        svc = _service()
-        resp = svc.users().drafts().list(userId="me", maxResults=max_results).execute()
-        drafts = resp.get("drafts", [])
+        drafts = _list_gmail_drafts(max_results)
         if not drafts:
             return "No existing drafts."
-        lines = []
-        for d in drafts:
-            detail = svc.users().drafts().get(
-                userId="me", id=d["id"], format="metadata"
-            ).execute()
-            payload = detail.get("message", {}).get("payload", {})
-            lines.append(
-                f"- draft_id={d['id']} | To: {_header(payload, 'To')} | Subject: {_header(payload, 'Subject')}"
-            )
+        lines = [
+            f"- draft_id={d['id']} | To: {d['to']} | Subject: {d['subject']}"
+            for d in drafts
+        ]
         return "\n".join(lines)
     except Exception:
         return "Could not list drafts. Try again."
+
+
+def _list_gmail_drafts(max_results: int = 20) -> list:
+    """Internal helper: return drafts as a list of dicts {id, to, subject, snippet}."""
+    svc = _service()
+    resp = svc.users().drafts().list(userId="me", maxResults=max_results).execute()
+    drafts = resp.get("drafts", [])
+    result = []
+    for d in drafts:
+        detail = svc.users().drafts().get(
+            userId="me", id=d["id"], format="metadata"
+        ).execute()
+        payload = detail.get("message", {}).get("payload", {})
+        result.append({
+            "id": d["id"],
+            "to": _header(payload, "To"),
+            "subject": _header(payload, "Subject"),
+            "snippet": detail.get("message", {}).get("snippet", ""),
+        })
+    return result
+
+
+def _send_gmail_draft(draft_id: str) -> bool:
+    """Internal helper: send a draft by id. Returns True on success."""
+    svc = _service()
+    svc.users().drafts().send(userId="me", body={"id": draft_id}).execute()
+    return True
+
+
+@tool
+def create_draft_for_approval(to: str, subject: str, body: str):
+    """Create a Gmail draft and send Wesley an SMS notification to review it. Does NOT send the email."""
+    try:
+        draft_id = _create_gmail_draft(to, subject, body)
+    except Exception as e:
+        return f"❌ Could not create draft: {e}"
+
+    my_phone = os.getenv("MY_PHONE_NUMBER")
+    if my_phone:
+        msg = (
+            f"📧 New draft ready\n"
+            f"To: {to}\n"
+            f"Subject: {subject}\n\n"
+            f"Review in Gmail Drafts."
+        )
+        sms_result = send_sms(my_phone, msg)
+        sms_note = "Notification sent." if sms_result else "SMS failed — check Twilio config."
+    else:
+        sms_note = "SMS skipped (MY_PHONE_NUMBER not set)."
+
+    return f"✅ Draft created (id={draft_id}). {sms_note}"

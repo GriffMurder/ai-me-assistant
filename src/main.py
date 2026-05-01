@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, HTMLResponse
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -124,6 +124,58 @@ async def sms_webhook(request: Request):
     return {"status": "ok"}
 
 
+@app.post("/voice", dependencies=[Depends(verify_twilio)])
+async def voice_webhook(request: Request):
+    """Twilio Voice webhook — spoken conversation with Me."""
+    from twilio.twiml.voice_response import VoiceResponse, Gather
+    form = await request.form()
+    call_sid = form.get("CallSid", "unknown")
+    speech = form.get("SpeechResult", "").strip()
+
+    if speech:
+        try:
+            result = get_me_agent().invoke(
+                {"messages": [{"role": "user", "content": speech}]},
+                config={"configurable": {"thread_id": f"voice-{call_sid}"}},
+            )
+            reply = _sanitize_response(result["messages"][-1].content)[:500]
+        except Exception as e:
+            reply = "Sorry, I ran into an issue. Try again."
+            print(f"Voice agent error: {e}")
+    else:
+        reply = "Hey, it's Me. What do you need?"
+
+    resp = VoiceResponse()
+    gather = Gather(input="speech", action="/voice", timeout=5, speechTimeout="auto")
+    gather.say(reply, voice="Polly.Joanna")
+    resp.append(gather)
+    # Fallback if caller says nothing after timeout
+    resp.say("I didn't catch that. Call back anytime.", voice="Polly.Joanna")
+    return Response(content=str(resp), media_type="text/xml")
+
+
+@app.get("/drafts", dependencies=[Depends(verify_owner)])
+async def get_drafts():
+    """List current Gmail drafts as structured JSON."""
+    try:
+        from src.tools.email import _list_gmail_drafts
+        drafts = _list_gmail_drafts()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not fetch drafts: {e}")
+    return {"drafts": drafts}
+
+
+@app.post("/drafts/{draft_id}/send", dependencies=[Depends(verify_owner)])
+async def send_draft(draft_id: str):
+    """Send a Gmail draft by id."""
+    try:
+        from src.tools.email import _send_gmail_draft
+        _send_gmail_draft(draft_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not send draft: {e}")
+    return {"sent": True, "draft_id": draft_id}
+
+
 @app.get("/plan/weekly", dependencies=[Depends(verify_owner)])
 async def weekly_plan():
     """Manually trigger weekly plan"""
@@ -133,6 +185,26 @@ async def weekly_plan():
         raise HTTPException(status_code=503, detail=f"Weekly planner unavailable: {e}")
     plan = await send_weekly_plan()
     return {"status": "Weekly plan generated", "plan": plan}
+
+@app.post("/upload", dependencies=[Depends(verify_owner)])
+async def upload_note(file: UploadFile = File(...)):
+    """Upload a .txt or .md file into long-term RAG memory."""
+    allowed = {".txt", ".md"}
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{ext}'. Only .txt and .md are accepted.",
+        )
+    try:
+        from src.tools.rag_upload import upload_note_from_text
+        raw = await file.read()
+        text = raw.decode("utf-8", errors="replace")
+        chunks = upload_note_from_text(text, title=file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+    return {"chunks": chunks, "title": file.filename}
+
 
 @app.get("/")
 async def root():

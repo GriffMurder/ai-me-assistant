@@ -85,6 +85,35 @@ async def email_triage_job():
         print(f"❌ Scheduled email triage error: {e}")
 
 
+async def check_reminders():
+    """Fire any reminders whose remind_at <= NOW() and haven't been sent yet."""
+    try:
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
+        now_iso = datetime.utcnow().isoformat() + "Z"
+        result = (
+            sb.table("reminders")
+            .select("id, task")
+            .lte("remind_at", now_iso)
+            .eq("fired", False)
+            .execute()
+        )
+        due = result.data or []
+        if not due:
+            return
+        my_phone = os.getenv("MY_PHONE_NUMBER")
+        fired_ids = []
+        for r in due:
+            if my_phone:
+                send_sms(my_phone, f"⏰ Reminder: {r['task']}")
+            fired_ids.append(r["id"])
+        if fired_ids:
+            sb.table("reminders").update({"fired": True}).in_("id", fired_ids).execute()
+            print(f"⏰ Fired {len(fired_ids)} reminder(s)")
+    except Exception as e:
+        print(f"❌ Reminder check error: {e}")
+
+
 def start_scheduler():
     """Start all background jobs"""
 
@@ -112,6 +141,14 @@ def start_scheduler():
         replace_existing=True,
         max_instances=1,
         coalesce=True,
+    )
+
+    # Hourly reminder check
+    scheduler.add_job(
+        check_reminders,
+        IntervalTrigger(hours=1),
+        id="reminder_check",
+        replace_existing=True,
     )
 
     scheduler.start()
