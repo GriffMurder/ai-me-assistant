@@ -85,7 +85,7 @@ def repo_overview() -> str:
         if not owner:
             return "❌ GITHUB_USERNAME env var not set."
 
-        user = _github.get_user(owner)
+        user = _github.get_user()  # no arg = authenticated user, includes private repos
         repos = list(user.get_repos(sort="pushed", direction="desc"))[:_OVERVIEW_LIMIT]
 
         if not repos:
