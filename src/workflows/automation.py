@@ -1,7 +1,7 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 from src.agent import get_me_agent
@@ -35,10 +35,13 @@ async def send_morning_briefing():
 
     my_phone = os.getenv("MY_PHONE_NUMBER")
     if my_phone:
-        send_sms(my_phone, f"🌅 Good morning Wesley\n\n{briefing}")
-        print("✅ Morning briefing sent via SMS")
+        sid = send_sms(my_phone, f"🌅 Good morning Wesley\n\n{briefing}")
+        if sid:
+            print(f"✅ Morning briefing sent via SMS (sid={sid})")
+        else:
+            print("❌ Morning briefing SMS failed — check Twilio config and logs")
     else:
-        print("⚠️ MY_PHONE_NUMBER not set — briefing not delivered")
+        print("❌ MY_PHONE_NUMBER not set — morning briefing not delivered")
 
     return briefing
 
@@ -64,10 +67,13 @@ async def send_weekly_plan():
 
     my_phone = os.getenv("MY_PHONE_NUMBER")
     if my_phone:
-        send_sms(my_phone, f"📅 Weekly Plan\n\n{plan}")
-        print("✅ Weekly plan sent via SMS")
+        sid = send_sms(my_phone, f"📅 Weekly Plan\n\n{plan}")
+        if sid:
+            print(f"✅ Weekly plan sent via SMS (sid={sid})")
+        else:
+            print("❌ Weekly plan SMS failed — check Twilio config and logs")
     else:
-        print("⚠️ MY_PHONE_NUMBER not set — weekly plan not delivered")
+        print("❌ MY_PHONE_NUMBER not set — weekly plan not delivered")
 
     return plan
 
@@ -90,7 +96,8 @@ async def check_reminders():
     try:
         from supabase import create_client
         sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
-        now_iso = datetime.utcnow().isoformat() + "Z"
+        # Use timezone-aware UTC — avoids the naive utcnow() + manual "Z" mismatch
+        now_iso = datetime.now(timezone.utc).isoformat()
         result = (
             sb.table("reminders")
             .select("id, task")
@@ -101,15 +108,30 @@ async def check_reminders():
         due = result.data or []
         if not due:
             return
+
         my_phone = os.getenv("MY_PHONE_NUMBER")
+        if not my_phone:
+            print("❌ Reminder check: MY_PHONE_NUMBER not set — reminders not delivered")
+            return
+
         fired_ids = []
         for r in due:
-            if my_phone:
-                send_sms(my_phone, f"⏰ Reminder: {r['task']}")
+            sid = send_sms(my_phone, f"⏰ Reminder: {r['task']}")
+            delivery_status = "sent" if sid else "failed"
+            delivery_error = None if sid else "SMS returned None — check Twilio config"
+            sb.table("reminders").update({
+                "fired": True,
+                "fired_at": datetime.now(timezone.utc).isoformat(),
+                "delivery_status": delivery_status,
+                "delivery_error": delivery_error,
+            }).eq("id", r["id"]).execute()
             fired_ids.append(r["id"])
-        if fired_ids:
-            sb.table("reminders").update({"fired": True}).in_("id", fired_ids).execute()
-            print(f"⏰ Fired {len(fired_ids)} reminder(s)")
+            if sid:
+                print(f"⏰ Reminder fired: '{r['task']}' (id={r['id']}, sid={sid})")
+            else:
+                print(f"❌ Reminder SMS failed: '{r['task']}' (id={r['id']})")
+
+        print(f"⏰ check_reminders: processed {len(fired_ids)} reminder(s)")
     except Exception as e:
         print(f"❌ Reminder check error: {e}")
 

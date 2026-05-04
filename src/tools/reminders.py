@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
@@ -23,13 +23,15 @@ def set_reminder(task: str, days: int = 3) -> str:
         days: Number of days from now (default 3, minimum 1).
     """
     days = max(1, days)
+    now_utc = datetime.now(timezone.utc)
     now_ct = datetime.now(ZoneInfo("America/Chicago"))
-    remind_at = (now_ct + timedelta(days=days)).isoformat()
+    remind_at_utc = now_utc + timedelta(days=days)
     remind_label = (now_ct + timedelta(days=days)).strftime("%A, %b %d")
     try:
         _supabase.table("reminders").insert({
             "task": task,
-            "remind_at": remind_at,
+            "remind_at": remind_at_utc.isoformat(),
+            "delivery_status": "pending",
         }).execute()
     except Exception as e:
         return f"❌ Failed to set reminder: {e}"

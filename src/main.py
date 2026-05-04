@@ -62,6 +62,21 @@ def _redirect_uri(request: Request) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _materialize_google_token()
+    # --- Startup readiness check ---
+    missing = []
+    for key in ("XAI_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
+                "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "MY_PHONE_NUMBER"):
+        if not os.getenv(key):
+            missing.append(key)
+    if missing:
+        print(f"⚠️  STARTUP: missing env vars: {', '.join(missing)}")
+    else:
+        print("✅ STARTUP: all required env vars present")
+    if not has_token():
+        print("⚠️  STARTUP: Google token missing — visit /auth/google to authorize")
+    else:
+        print("✅ STARTUP: Google token present")
+    # --- Scheduler ---
     try:
         from src.workflows.automation import start_scheduler
         start_scheduler()
@@ -243,7 +258,88 @@ OAUTH_STATE_COOKIE = "google_oauth_state"
 OAUTH_VERIFIER_COOKIE = "google_oauth_verifier"
 
 
-@app.get("/auth/google")
+@app.get("/diagnostics", dependencies=[Depends(verify_owner)])
+async def diagnostics():
+    """Owner-only: real-time subsystem health — Google, Twilio, Supabase, scheduler, reminders."""
+    from datetime import timezone as _tz
+    result: dict = {}
+
+    # --- Google ---
+    try:
+        from src.auth.google_auth import load_creds
+        creds = load_creds()
+        result["google"] = {
+            "token_present": True,
+            "valid": creds.valid,
+            "expired": creds.expired,
+            "has_refresh_token": bool(creds.refresh_token),
+            "scopes": list(creds.scopes or []),
+        }
+    except Exception as e:
+        result["google"] = {"token_present": False, "error": str(e)}
+
+    # --- Twilio ---
+    from src.tools.sms import _twilio_configured
+    twilio_ok, twilio_reason = _twilio_configured()
+    result["twilio"] = {
+        "configured": twilio_ok,
+        "my_phone_set": bool(os.getenv("MY_PHONE_NUMBER")),
+        "reason": twilio_reason or "ok",
+    }
+
+    # --- Supabase ---
+    try:
+        from supabase import create_client as _sb
+        sb = _sb(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
+        sb.table("reminders").select("id").limit(1).execute()
+        result["supabase"] = {"connected": True}
+    except Exception as e:
+        result["supabase"] = {"connected": False, "error": str(e)}
+
+    # --- Scheduler ---
+    try:
+        from src.workflows.automation import scheduler as _sched
+        jobs = []
+        for job in _sched.get_jobs():
+            next_run = job.next_run_time
+            jobs.append({
+                "id": job.id,
+                "next_run": next_run.isoformat() if next_run else "paused",
+            })
+        result["scheduler"] = {"running": _sched.running, "jobs": jobs}
+    except Exception as e:
+        result["scheduler"] = {"running": False, "error": str(e)}
+
+    # --- Reminders ---
+    try:
+        from supabase import create_client as _sb2
+        from datetime import datetime as _dt
+        sb2 = _sb2(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
+        now_iso = _dt.now(_tz.utc).isoformat()
+        pending = sb2.table("reminders").select("id", count="exact").eq("fired", False).execute()
+        overdue = sb2.table("reminders").select("id", count="exact").eq("fired", False).lte("remind_at", now_iso).execute()
+        result["reminders"] = {
+            "pending": pending.count,
+            "overdue": overdue.count,
+        }
+    except Exception as e:
+        result["reminders"] = {"error": str(e)}
+
+    return result
+
+
+@app.post("/diagnostics/check-reminders", dependencies=[Depends(verify_owner)])
+async def manual_check_reminders():
+    """Owner-only: force-run the reminder check job right now. Use to test without waiting an hour."""
+    try:
+        from src.workflows.automation import check_reminders
+        await check_reminders()
+        return {"status": "ok", "message": "Reminder check complete — see Render logs for details"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reminder check failed: {e}")
+
+
+
 async def auth_google_start(request: Request):
     """Kick off Google OAuth. Visit this in a browser, click Allow, done."""
     flow = build_flow(_redirect_uri(request))
