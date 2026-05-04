@@ -340,6 +340,7 @@ async def manual_check_reminders():
 
 
 
+@app.get("/auth/google")
 async def auth_google_start(request: Request):
     """Kick off Google OAuth. Visit this in a browser, click Allow, done."""
     flow = build_flow(_redirect_uri(request))
