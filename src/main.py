@@ -254,8 +254,28 @@ async def health_full():
     return status
 
 
-OAUTH_STATE_COOKIE = "google_oauth_state"
-OAUTH_VERIFIER_COOKIE = "google_oauth_verifier"
+# In-memory OAuth state store — avoids cross-domain cookie issues with Render + custom domain.
+# Maps state token -> {code_verifier, expires_at}. Single instance; TTL is 10 min.
+import time as _time
+_oauth_state_store: dict = {}
+
+def _store_oauth_state(state: str, code_verifier: str):
+    """Save state → verifier with a 10-min TTL."""
+    _oauth_state_store[state] = {"code_verifier": code_verifier, "expires_at": _time.time() + 600}
+    # Prune expired entries opportunistically
+    now = _time.time()
+    expired = [k for k, v in _oauth_state_store.items() if v["expires_at"] < now]
+    for k in expired:
+        del _oauth_state_store[k]
+
+def _pop_oauth_state(state: str) -> str | None:
+    """Return code_verifier for the given state and remove it. Returns None if missing/expired."""
+    entry = _oauth_state_store.pop(state, None)
+    if not entry:
+        return None
+    if entry["expires_at"] < _time.time():
+        return None
+    return entry["code_verifier"]
 
 
 @app.get("/diagnostics", dependencies=[Depends(verify_owner)])
@@ -349,11 +369,9 @@ async def auth_google_start(request: Request):
         include_granted_scopes="true",
         prompt="consent",  # force refresh_token issuance
     )
-    response = RedirectResponse(auth_url)
-    # Persist OAuth state + PKCE verifier in cookies so callback works across instances.
-    response.set_cookie(OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, secure=True, samesite="lax")
-    response.set_cookie(OAUTH_VERIFIER_COOKIE, flow.code_verifier or "", max_age=600, httponly=True, secure=True, samesite="lax")
-    return response
+    # Store state server-side — avoids cross-domain cookie loss (onrender.com vs wesleynappi.com)
+    _store_oauth_state(state, flow.code_verifier or "")
+    return RedirectResponse(auth_url)
 
 
 @app.get("/auth/google/callback")
@@ -361,36 +379,31 @@ async def auth_google_callback(request: Request):
     """Google redirects here after user clicks Allow. Saves token to Supabase."""
     try:
         returned_state = request.query_params.get("state")
-        expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
-        code_verifier = request.cookies.get(OAUTH_VERIFIER_COOKIE)
+        if not returned_state:
+            raise RuntimeError("Missing state parameter in callback. Start again at /auth/google")
 
-        if not returned_state or not expected_state or returned_state != expected_state:
-            raise RuntimeError("OAuth state mismatch. Start again at /auth/google")
-        if not code_verifier:
-            raise RuntimeError("Missing OAuth code verifier. Start again at /auth/google")
+        code_verifier = _pop_oauth_state(returned_state)
+        if code_verifier is None:
+            raise RuntimeError(
+                "OAuth state not found or expired (10-min limit). Start again at /auth/google"
+            )
 
         flow = build_flow(_redirect_uri(request))
         flow.fetch_token(
             authorization_response=str(request.url),
-            code_verifier=code_verifier,
+            code_verifier=code_verifier if code_verifier else None,
         )
         save_creds_from_flow(flow)
     except Exception as e:
-        response = HTMLResponse(
+        return HTMLResponse(
             f"<h2>OAuth failed</h2><pre>{traceback.format_exc()}</pre>",
             status_code=500,
         )
-        response.delete_cookie(OAUTH_STATE_COOKIE)
-        response.delete_cookie(OAUTH_VERIFIER_COOKIE)
-        return response
-    response = HTMLResponse(
+    return HTMLResponse(
         "<h2>✅ Google authorized.</h2>"
         "<p>Token saved to Supabase. Calendar + Gmail tools are live.</p>"
         "<p><a href='/'>Back to chat</a></p>"
     )
-    response.delete_cookie(OAUTH_STATE_COOKIE)
-    response.delete_cookie(OAUTH_VERIFIER_COOKIE)
-    return response
 
 if __name__ == "__main__":
     import uvicorn
