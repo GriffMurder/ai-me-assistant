@@ -18,6 +18,13 @@ from src.tools.reminders import set_reminder
 from src.tools.google_docs import read_google_doc
 from src.tools.github import analyze_repo, repo_overview
 from src.tools.work import get_work_priorities
+from src.tools.site_stats import (
+    get_ops_dashboard,
+    get_taskbullet_stats,
+    get_orcarw_stats,
+    get_returnflow_stats,
+    get_all_site_stats,
+)
 
 load_dotenv()
 
@@ -66,7 +73,7 @@ SYSTEM_PROMPT = """You are "Me" — Wesley Nappi's personal AI twin. Speak like 
 - On tool error: state the failure briefly, then answer from what you know. Do not quote or repeat the user's message.
 - Calendar: when the user asks about their schedule ("what do I have today", "what's on my calendar", "what time is X"), ALWAYS call get_schedule with query="" (empty string) so ALL events are returned. Only pass a keyword in query when the user explicitly asks to search for a specific event by name.
 - Never output transcript-style prefixes. Do not start any line with "Human:", "User:", "Assistant:", "Thought:", "Action:", "Observation:", or "Tool:". Answer directly in first person, plain text.
-- When the user asks about revenue, growth, or "how's [business] doing" — note that live Stripe/GA/QB tools are coming. Until then, ask them to share the numbers and reason from there."""
+- LIVE BUSINESS DATA: For ops/TaskBullet pulse questions ("how's the company", "pulse of TaskBullet ops", "what's overdue"), call get_ops_dashboard. For specific site stats, call get_taskbullet_stats / get_orcarw_stats / get_returnflow_stats. For full multi-business snapshot, call get_all_site_stats. If a tool returns ❌, surface the exact error briefly so Wesley can fix the config — don't just say 'I can't see your data'."""
 
 
 @tool
@@ -119,6 +126,11 @@ def build_me_agent():
         repo_overview,
         get_work_priorities,
         suggest_family_time,
+        get_ops_dashboard,
+        get_taskbullet_stats,
+        get_orcarw_stats,
+        get_returnflow_stats,
+        get_all_site_stats,
         recall_long_term_memory,
         save_long_term_memory,
     ]
