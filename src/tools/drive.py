@@ -4,7 +4,9 @@ from __future__ import annotations
 from googleapiclient.discovery import build
 from langchain_core.tools import tool
 
-from src.auth.google_auth import load_creds as _load_creds
+from src.auth.google_auth import DRIVE_READONLY_SCOPE, load_creds as _load_creds
+
+_DRIVE_SCOPES = [DRIVE_READONLY_SCOPE]
 
 _MIME_LABELS = {
     "application/vnd.google-apps.folder": "📁 Folder",
@@ -26,7 +28,7 @@ def _label(mime: str) -> str:
 
 
 def _svc():
-    return build("drive", "v3", credentials=_load_creds(), cache_discovery=False)
+    return build("drive", "v3", credentials=_load_creds(_DRIVE_SCOPES), cache_discovery=False)
 
 
 @tool

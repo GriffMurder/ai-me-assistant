@@ -6,14 +6,27 @@ from dotenv import load_dotenv
 from googleapiclient.discovery import build
 from langchain_core.tools import tool
 
-from src.auth.google_auth import load_creds as _load_creds
+from src.auth.google_auth import (
+    GMAIL_COMPOSE_SCOPE,
+    GMAIL_MODIFY_SCOPE,
+    GMAIL_READONLY_SCOPE,
+    GMAIL_SEND_SCOPE,
+    load_creds as _load_creds,
+)
 from src.tools.sms import send_sms
 
 load_dotenv()
 
+_GMAIL_SCOPES = [
+    GMAIL_READONLY_SCOPE,
+    GMAIL_SEND_SCOPE,
+    GMAIL_COMPOSE_SCOPE,
+    GMAIL_MODIFY_SCOPE,
+]
+
 
 def _service():
-    return build("gmail", "v1", credentials=_load_creds(), cache_discovery=False)
+    return build("gmail", "v1", credentials=_load_creds(_GMAIL_SCOPES), cache_discovery=False)
 
 
 def _header(payload, name):

@@ -3,10 +3,11 @@ import re
 from googleapiclient.discovery import build
 from langchain_core.tools import tool
 
-from src.auth.google_auth import load_creds as _load_creds
+from src.auth.google_auth import DOCS_READONLY_SCOPE, load_creds as _load_creds
 
 _DOC_URL_RE = re.compile(r"/document/d/([a-zA-Z0-9_-]+)")
 _MAX_CHARS = 8000
+_DOC_SCOPES = [DOCS_READONLY_SCOPE]
 
 
 def _extract_doc_id(doc_id_or_url: str) -> str:
@@ -43,7 +44,7 @@ def read_google_doc(document_id_or_url: str) -> str:
     """
     try:
         doc_id = _extract_doc_id(document_id_or_url)
-        svc = build("docs", "v1", credentials=_load_creds(), cache_discovery=False)
+        svc = build("docs", "v1", credentials=_load_creds(_DOC_SCOPES), cache_discovery=False)
         doc = svc.documents().get(documentId=doc_id).execute()
         title = doc.get("title", "(untitled)")
         text = _doc_to_text(doc)

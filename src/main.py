@@ -286,7 +286,14 @@ async def diagnostics():
 
     # --- Google ---
     try:
-        from src.auth.google_auth import SCOPES, _load_token_dict, load_creds, missing_required_scopes
+        from src.auth.google_auth import (
+            CORE_SCOPES,
+            OPTIONAL_SCOPES,
+            _load_token_dict,
+            load_creds,
+            missing_optional_scopes,
+            missing_required_scopes,
+        )
         token_data = _load_token_dict()
         creds = load_creds()
         result["google"] = {
@@ -294,18 +301,28 @@ async def diagnostics():
             "valid": creds.valid,
             "expired": creds.expired,
             "has_refresh_token": bool(creds.refresh_token),
-            "scopes": list(creds.scopes or []),
-            "required_scopes": SCOPES,
-            "missing_scopes": missing_required_scopes(token_data),
+            "granted_scopes": list(creds.scopes or []),
+            "core_scopes": CORE_SCOPES,
+            "optional_scopes": OPTIONAL_SCOPES,
+            "missing_core_scopes": missing_required_scopes(token_data),
+            "missing_optional_scopes": missing_optional_scopes(token_data),
         }
     except Exception as e:
         try:
-            from src.auth.google_auth import SCOPES, _load_token_dict, missing_required_scopes
+            from src.auth.google_auth import (
+                CORE_SCOPES,
+                OPTIONAL_SCOPES,
+                _load_token_dict,
+                missing_optional_scopes,
+                missing_required_scopes,
+            )
             token_data = _load_token_dict()
             result["google"] = {
                 "token_present": bool(token_data),
-                "required_scopes": SCOPES,
-                "missing_scopes": missing_required_scopes(token_data),
+                "core_scopes": CORE_SCOPES,
+                "optional_scopes": OPTIONAL_SCOPES,
+                "missing_core_scopes": missing_required_scopes(token_data),
+                "missing_optional_scopes": missing_optional_scopes(token_data),
                 "error": str(e),
             }
         except Exception as status_error:
@@ -406,7 +423,9 @@ async def auth_google_callback(request: Request):
             authorization_response=str(request.url),
             code_verifier=code_verifier if code_verifier else None,
         )
-        save_creds_from_flow(flow)
+        host = (request.url.hostname or "").lower()
+        require_supabase = host not in {"127.0.0.1", "localhost"}
+        save_creds_from_flow(flow, require_supabase=require_supabase)
     except Exception as e:
         return HTMLResponse(
             f"<h2>OAuth failed</h2><pre>{traceback.format_exc()}</pre>",
@@ -414,7 +433,7 @@ async def auth_google_callback(request: Request):
         )
     return HTMLResponse(
         "<h2>✅ Google authorized.</h2>"
-        "<p>Token saved to Supabase. Calendar + Gmail tools are live.</p>"
+        "<p>Token saved and verified. Calendar + Gmail tools are live.</p>"
         "<p><a href='/'>Back to chat</a></p>"
     )
 

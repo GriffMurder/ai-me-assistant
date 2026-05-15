@@ -2,10 +2,11 @@ from langchain_core.tools import tool
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta
 
-from src.auth.google_auth import load_creds as _load_creds
+from src.auth.google_auth import CALENDAR_EVENTS_SCOPE, load_creds as _load_creds
 
 _TIMEZONE = "America/Chicago"
 _TIME_FMT = "%Y-%m-%dT%H:%M:%S"
+_CALENDAR_WRITE_SCOPES = [CALENDAR_EVENTS_SCOPE]
 
 
 def _parse_and_offset(dt_str: str, offset_hours: int = 0) -> str:
@@ -46,7 +47,7 @@ def create_calendar_event(
             "end": {"dateTime": resolved_end, "timeZone": _TIMEZONE},
         }
 
-        creds = _load_creds()
+        creds = _load_creds(_CALENDAR_WRITE_SCOPES)
         service = build("calendar", "v3", credentials=creds, cache_discovery=False)
         created = service.events().insert(calendarId=calendar_id, body=event_body).execute()
 

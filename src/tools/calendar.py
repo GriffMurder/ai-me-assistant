@@ -5,9 +5,11 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import time
 
-from src.auth.google_auth import load_creds as _load_creds
+from src.auth.google_auth import CALENDAR_READONLY_SCOPE, load_creds as _load_creds
 
 load_dotenv()
+
+_CALENDAR_READ_SCOPES = [CALENDAR_READONLY_SCOPE]
 
 # Fallback calendar IDs if dynamic discovery fails.
 _FALLBACK_CALENDAR_IDS = ["primary", "wes@taskbullet.com"]
@@ -100,7 +102,7 @@ def get_schedule(query: str, start_date: str = None, end_date: str = None):
         end_date: End date in YYYY-MM-DD format. Defaults to start_date (single day query).
     """
     try:
-        creds = _load_creds()
+        creds = _load_creds(_CALENDAR_READ_SCOPES)
         service = build("calendar", "v3", credentials=creds, cache_discovery=False)
 
         tz = ZoneInfo("America/Chicago")
