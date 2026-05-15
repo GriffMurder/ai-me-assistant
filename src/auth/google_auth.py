@@ -133,11 +133,9 @@ def _save_token_dict(data: dict, *, require_supabase: bool = False) -> dict:
             status["verified_in_supabase"] = True
         except Exception as e:
             supabase_error = e
-            if require_supabase:
-                raise RuntimeError(f"Supabase google_token write failed: {e}") from e
             print(f"⚠️  Supabase google_token write failed: {e}")
     elif require_supabase:
-        raise RuntimeError("Supabase is not configured for Google token persistence.")
+        print("⚠️  Supabase not configured — token will be saved to local file only.")
     try:
         TOKEN_FILE.write_text(payload)
         status["saved_to_file"] = True
@@ -147,7 +145,10 @@ def _save_token_dict(data: dict, *, require_supabase: bool = False) -> dict:
         print(f"⚠️  Local token.json write failed (Supabase is still authoritative): {e}")
     if require_supabase and not status["verified_in_supabase"]:
         reason = supabase_error or "verification did not complete"
-        raise RuntimeError(f"Supabase google_token write could not be verified: {reason}")
+        if not status["saved_to_file"]:
+            # Nothing persisted anywhere — this is a real failure.
+            raise RuntimeError(f"Token could not be persisted (Supabase: {reason}, local file also failed)")
+        print(f"⚠️  Supabase verification failed ({reason}). Token saved to local file only — will be lost on next Render redeploy.")
     return status
 
 
@@ -170,7 +171,9 @@ def load_creds(required_scopes: Sequence[str] | None = None) -> Credentials:
             f"Missing scopes: {', '.join(missing)}"
         )
     granted = list(_token_scopes(data))
-    creds = Credentials.from_authorized_user_info(data, granted or required)
+    # Use stored scopes if available so the credential object matches what Google issued.
+    # Fall back to all SCOPES (not just required) so no other feature's calls narrow unexpectedly.
+    creds = Credentials.from_authorized_user_info(data, granted if granted else SCOPES)
     if creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())

@@ -425,15 +425,22 @@ async def auth_google_callback(request: Request):
         )
         host = (request.url.hostname or "").lower()
         require_supabase = host not in {"127.0.0.1", "localhost"}
-        save_creds_from_flow(flow, require_supabase=require_supabase)
+        status = save_creds_from_flow(flow, require_supabase=require_supabase)
     except Exception as e:
         return HTMLResponse(
             f"<h2>OAuth failed</h2><pre>{traceback.format_exc()}</pre>",
             status_code=500,
         )
+    if status.get("verified_in_supabase"):
+        persistence_note = "<p>Token saved and <strong>verified in Supabase</strong> — will survive all future redeploys.</p>"
+    elif status.get("saved_to_file"):
+        persistence_note = "<p>⚠️ Supabase unavailable — token saved to local file only. Authorize again once Supabase recovers to make it permanent.</p>"
+    else:
+        persistence_note = "<p>⚠️ Token may not have persisted. Check Render logs.</p>"
     return HTMLResponse(
-        "<h2>✅ Google authorized.</h2>"
-        "<p>Token saved and verified. Calendar + Gmail tools are live.</p>"
+        f"<h2>✅ Google authorized.</h2>"
+        f"{persistence_note}"
+        "<p>Calendar + Gmail tools are live.</p>"
         "<p><a href='/'>Back to chat</a></p>"
     )
 
