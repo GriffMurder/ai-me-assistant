@@ -524,6 +524,7 @@
   }
 
   .dash-actions,
+  .dash-biz,
   .dash-upload {
     grid-column: span 6;
   }
@@ -738,6 +739,7 @@
     }
 
     .dash-actions,
+    .dash-biz,
     .dash-upload {
       grid-column: span 12;
     }
@@ -938,9 +940,9 @@
       <span class="brand-kicker">Wesley's Personal Command Center</span>
       <div class="brand-row">
         <h1>AI Me</h1>
-        <span class="brand-badge">Calendar • Gmail • SMS</span>
+        <span class="brand-badge">Calendar • Gmail • Drive • GitHub • SMS</span>
       </div>
-      <p class="brand-copy">A cleaner front end for the same assistant: faster chat, clearer quick actions, and a voice toggle you do not have to hunt for.</p>
+      <p class="brand-copy">Four businesses. One church branch. One family. One place to run it all — chat, quick actions, priorities, and live business pulse.</p>
     </div>
     <div class="control-panel">
       <div id="status">
@@ -958,24 +960,24 @@
   <section class="hero-band">
     <div class="hero-copy">
       <span class="hero-kicker">Operating System</span>
-      <h2>Type when you can. Talk when you need to. Keep the noise down.</h2>
-      <p>Chat stays focused, the dashboard stays useful, and spoken replies can be shut off with one clear switch in the header.</p>
+      <h2>Four businesses. One brain. Zero dropped balls.</h2>
+      <p>TaskBullet, ReturnFlow, Straws, and Orca — plus church, family, and the calendar. All routed through one assistant that already knows the context.</p>
     </div>
     <div class="hero-stats">
       <div class="note-card">
-        <span>Voice Input</span>
-        <strong>Tap Talk</strong>
-        <p>Dictate directly into chat when typing is slow.</p>
+        <span>4 Businesses</span>
+        <strong>Live Pulse</strong>
+        <p>TaskBullet, ReturnFlow, Straws, and Orca — stats and priorities on demand.</p>
       </div>
       <div class="note-card">
-        <span>Voice Output</span>
-        <strong>Header Toggle</strong>
-        <p>Mute spoken replies instantly without disabling the mic.</p>
+        <span>Drive + GitHub</span>
+        <strong>Full Stack</strong>
+        <p>Search docs, read files, open PRs, and manage repos without leaving chat.</p>
       </div>
       <div class="note-card">
-        <span>Dashboard</span>
+        <span>Calendar + Gmail</span>
         <strong>Quick Actions</strong>
-        <p>Jump into reminders, drafts, memory, and calendar actions fast.</p>
+        <p>Drafts, reminders, scheduling, memory — all the daily ops in one dashboard.</p>
       </div>
     </div>
   </section>
@@ -1014,9 +1016,21 @@
       <div class="quick-actions">
         <button class="qa-btn" onclick="quickAction('Log interview for ')">Log interview</button>
         <button class="qa-btn" onclick="quickAction('Log ministering for ')">Log ministering</button>
-        <button class="qa-btn" onclick="quickAction('Protect family time: ')">Protect family time</button>
+        <button class="qa-btn" onclick="quickAction('Protect family time on ')">Protect family time</button>
         <button class="qa-btn" onclick="quickAction('Create calendar event: ')">Add calendar event</button>
         <button class="qa-btn" onclick="quickAction('Set a reminder for ')">Set reminder</button>
+        <button class="qa-btn" onclick="quickAction('What are my top priorities today across all 4 businesses?')">Business priorities</button>
+      </div>
+    </div>
+    <div class="dash-card dash-biz">
+      <h2>Business Pulse</h2>
+      <div class="quick-actions">
+        <button class="qa-btn" onclick="sendQuick('Give me the TaskBullet ops dashboard and current priorities.')">TaskBullet pulse</button>
+        <button class="qa-btn" onclick="sendQuick('Give me the ReturnFlow stats and current priorities.')">ReturnFlow pulse</button>
+        <button class="qa-btn" onclick="sendQuick('Give me the Straws site stats and current priorities.')">Straws pulse</button>
+        <button class="qa-btn" onclick="sendQuick('Give me the Orca site stats and current priorities.')">Orca pulse</button>
+        <button class="qa-btn" onclick="sendQuick('Give me a full snapshot of all 4 businesses — stats, status, and top growth lever for each.')">All businesses</button>
+        <button class="qa-btn" onclick="sendQuick('Show me all open GitHub PRs across my repos.')">GitHub PRs</button>
       </div>
     </div>
     <div class="dash-card dash-upload">
@@ -1171,7 +1185,7 @@
     }
   });
 
-  if (authToken) addMsg("bot", "Hey, I'm Me — Wesley's AI twin. Ask me about your schedule, emails, or anything else.");
+  if (authToken) addMsg("bot", "Hey, I'm Me — Wesley's AI twin. Ask me about your schedule, emails, any of the 4 businesses, Drive files, GitHub, or whatever else needs handling.");
 
   // --- Mute toggle ---
   const muteBtn = document.getElementById("mute-btn");
@@ -1403,6 +1417,13 @@
     input.value = template;
     input.focus();
     input.setSelectionRange(template.length, template.length);
+  }
+
+  // --- Quick action send (auto-submits) ---
+  function sendQuick(message) {
+    showTab("chat");
+    input.value = message;
+    form.requestSubmit();
   }
 </script>
 </body>
