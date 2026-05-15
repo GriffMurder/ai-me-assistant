@@ -5,357 +5,1035 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>AI Me — Wesley</title>
 <style>
+  @import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap");
+
   :root {
-    --bg: #0b0d10;
-    --panel: #15191f;
-    --panel-2: #1c2128;
-    --text: #e6edf3;
-    --muted: #8b949e;
-    --accent: #58a6ff;
-    --user: #2f81f7;
-    --bot: #2ea043;
-    --border: #30363d;
+    --bg: #f2eadf;
+    --bg-deep: #e6d9c2;
+    --panel: rgba(255, 250, 241, 0.82);
+    --panel-strong: #fffaf1;
+    --panel-stronger: #fffdf8;
+    --text: #17312d;
+    --muted: #65726a;
+    --accent: #c86a44;
+    --accent-strong: #9f4c2d;
+    --accent-soft: #f5ddcf;
+    --teal: #245f58;
+    --teal-soft: #d8ece7;
+    --user: #245f58;
+    --bot: #fff9f0;
+    --danger: #a03f34;
+    --danger-soft: #f6d8d2;
+    --border: rgba(23, 49, 45, 0.14);
+    --shadow: 0 28px 70px rgba(77, 51, 22, 0.14);
   }
+
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
+
+  html, body {
+    min-height: 100%;
+    margin: 0;
+  }
+
   body {
-    background: var(--bg);
+    background:
+      radial-gradient(circle at top left, rgba(200, 106, 68, 0.18), transparent 32%),
+      radial-gradient(circle at top right, rgba(36, 95, 88, 0.16), transparent 28%),
+      linear-gradient(180deg, #f7f1e7 0%, var(--bg) 45%, var(--bg-deep) 100%);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "Space Grotesk", "Segoe UI", sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 28px 20px 40px;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      repeating-linear-gradient(90deg, rgba(23, 49, 45, 0.028) 0 1px, transparent 1px 120px),
+      repeating-linear-gradient(0deg, rgba(23, 49, 45, 0.024) 0 1px, transparent 1px 120px);
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.35), transparent 72%);
+    pointer-events: none;
+  }
+
+  button,
+  textarea,
+  input {
+    font: inherit;
+  }
+
+  button {
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background-color .18s ease, color .18s ease;
+  }
+
+  button:hover {
+    transform: translateY(-1px);
+  }
+
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .app-shell {
+    width: min(1180px, 100%);
     display: flex;
     flex-direction: column;
+    gap: 18px;
+    position: relative;
+    z-index: 1;
   }
+
   header {
-    padding: 14px 20px;
     background: var(--panel);
-    border-bottom: 1px solid var(--border);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+    padding: 28px;
     display: flex;
+    gap: 24px;
     justify-content: space-between;
+    align-items: flex-start;
+    animation: rise .45s ease;
+  }
+
+  .brand-block {
+    max-width: 680px;
+  }
+
+  .brand-kicker,
+  .hero-kicker,
+  .composer-label,
+  .status-label,
+  .gate-kicker {
+    display: inline-block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .brand-row {
+    display: flex;
     align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 10px 0 8px;
   }
-  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
-  header .status { font-size: 12px; color: var(--muted); }
-  #chat {
-    flex: 1;
-    overflow-y: auto;
+
+  header h1 {
+    margin: 0;
+    font-family: "Fraunces", Georgia, serif;
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+  }
+
+  .brand-badge {
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .brand-copy {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.7;
+    max-width: 62ch;
+  }
+
+  .control-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 280px;
+    align-items: stretch;
+  }
+
+  #status {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 18px;
+    border-radius: 20px;
+    background: rgba(255, 253, 248, 0.86);
+    border: 1px solid var(--border);
+  }
+
+  .status-value {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 15px;
+    color: var(--text);
+  }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .ghost-btn,
+  .voice-toggle,
+  .tab,
+  .refresh-btn,
+  .qa-btn,
+  .draft-send-btn,
+  #mic-btn {
+    border: 1px solid var(--border);
+    background: rgba(255, 253, 248, 0.72);
+    color: var(--text);
+  }
+
+  .ghost-btn,
+  .voice-toggle {
+    min-height: 46px;
+    padding: 0 16px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .voice-toggle {
+    background: var(--teal-soft);
+    border-color: rgba(36, 95, 88, 0.18);
+    color: var(--teal);
+  }
+
+  .voice-toggle.muted {
+    background: var(--danger-soft);
+    border-color: rgba(160, 63, 52, 0.18);
+    color: var(--danger);
+  }
+
+  .danger-btn {
+    color: var(--danger);
+  }
+
+  .hero-band {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+    gap: 18px;
+    animation: rise .55s ease;
+  }
+
+  .hero-copy,
+  .note-card,
+  #chat-workspace,
+  #dashboard,
+  .dash-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(16px);
+  }
+
+  .hero-copy {
+    border-radius: 26px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero-copy::after {
+    content: "";
+    position: absolute;
+    right: -20px;
+    bottom: -26px;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(200, 106, 68, 0.24), transparent 68%);
+  }
+
+  .hero-copy h2 {
+    margin: 14px 0 12px;
+    font-family: "Fraunces", Georgia, serif;
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+    max-width: 11ch;
+  }
+
+  .hero-copy p {
+    margin: 0;
+    max-width: 52ch;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .note-card {
+    border-radius: 22px;
     padding: 20px;
-    max-width: 820px;
-    width: 100%;
-    margin: 0 auto;
+    animation: rise .65s ease;
   }
+
+  .note-card:nth-child(2) { animation-delay: .05s; }
+  .note-card:nth-child(3) { animation-delay: .1s; }
+
+  .note-card span {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .note-card strong {
+    display: block;
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+
+  .note-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  #tabs {
+    display: inline-flex;
+    align-self: flex-start;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 999px;
+    background: rgba(255, 250, 241, 0.7);
+    border: 1px solid var(--border);
+    box-shadow: 0 12px 30px rgba(77, 51, 22, 0.1);
+    animation: rise .6s ease;
+  }
+
+  .tab {
+    padding: 11px 18px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .tab.active {
+    background: var(--text);
+    color: #fff7ee;
+    border-color: var(--text);
+  }
+
+  #chat-workspace {
+    display: flex;
+    flex-direction: column;
+    border-radius: 28px;
+    overflow: hidden;
+    animation: rise .7s ease;
+  }
+
+  #chat {
+    min-height: 460px;
+    max-height: 64vh;
+    overflow-y: auto;
+    padding: 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    background:
+      linear-gradient(180deg, rgba(255, 253, 248, 0.92), rgba(255, 248, 239, 0.72)),
+      radial-gradient(circle at top right, rgba(36, 95, 88, 0.08), transparent 28%);
+  }
+
+  .msg-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: min(720px, 88%);
+  }
+
+  .msg-row.user {
+    align-self: flex-end;
+  }
+
+  .msg-row.bot,
+  .msg-row.error {
+    align-self: flex-start;
+  }
+
+  .msg-meta {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
   .msg {
-    margin: 10px 0;
-    padding: 12px 16px;
-    border-radius: 12px;
-    line-height: 1.5;
+    padding: 16px 18px;
+    border-radius: 22px;
+    line-height: 1.65;
     white-space: pre-wrap;
     word-wrap: break-word;
-    max-width: 85%;
+    box-shadow: 0 12px 32px rgba(77, 51, 22, 0.08);
   }
+
   .msg.user {
-    background: var(--user);
-    color: #fff;
-    margin-left: auto;
-    border-bottom-right-radius: 2px;
+    background: linear-gradient(135deg, #295f58, #1e4a46);
+    color: #f7f4ee;
+    border-bottom-right-radius: 8px;
   }
+
   .msg.bot {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-bottom-left-radius: 2px;
+    background: var(--bot);
+    border: 1px solid rgba(23, 49, 45, 0.1);
+    border-bottom-left-radius: 8px;
   }
+
   .msg.error {
-    background: #3a1f1f;
-    border: 1px solid #6b2424;
-    color: #ffb4b4;
+    background: var(--danger-soft);
+    color: #74271f;
+    border: 1px solid rgba(160, 63, 52, 0.15);
   }
-  .typing { color: var(--muted); font-style: italic; }
+
+  .typing {
+    color: var(--muted);
+    font-style: italic;
+  }
+
   form {
     display: flex;
-    gap: 8px;
-    padding: 12px 20px;
-    background: var(--panel);
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px 24px 24px;
     border-top: 1px solid var(--border);
-    max-width: 820px;
-    width: 100%;
-    margin: 0 auto;
+    background:
+      linear-gradient(180deg, rgba(255, 250, 241, 0.96), rgba(248, 239, 226, 0.92));
   }
-  textarea {
-    flex: 1;
-    min-height: 44px;
-    max-height: 160px;
-    resize: none;
-    padding: 10px 14px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--panel-2);
-    color: var(--text);
-    font: inherit;
-    outline: none;
-  }
-  textarea:focus { border-color: var(--accent); }
-  button {
-    padding: 0 18px;
-    border: none;
-    border-radius: 10px;
-    background: var(--accent);
-    color: #0b0d10;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .actions { display: flex; gap: 8px; }
-  .actions button {
-    background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    font-weight: 400;
-    font-size: 12px;
-    padding: 6px 10px;
-  }
-  .actions button:hover { color: var(--text); }
-  #mic-btn {
-    padding: 0 14px;
-    background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    font-size: 18px;
-    transition: color .15s, border-color .15s;
-  }
-  #mic-btn:hover { color: var(--text); border-color: var(--muted); }
-  #mic-btn.listening {
-    color: #f85149;
-    border-color: #f85149;
-    animation: pulse 1s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
-  /* Tab bar */
-  #tabs {
-    background: var(--panel);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    padding: 0 20px;
-  }
-  .tab {
-    background: transparent;
-    color: var(--muted);
-    border: none;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: color .15s, border-color .15s;
-  }
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  /* Dashboard panel */
-  #dashboard {
-    display: none;
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    max-width: 820px;
-    width: 100%;
-    margin: 0 auto;
-  }
-  .dash-card {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
-  }
-  .dash-card h2 {
-    margin: 0 0 14px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: .05em;
+
+  .composer-head {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 14px;
   }
-  .refresh-btn {
-    background: transparent;
-    border: 1px solid var(--border);
+
+  .composer-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-top: 6px;
+  }
+
+  .composer-subtitle {
     color: var(--muted);
-    font-size: 11px;
-    font-weight: 400;
-    padding: 3px 8px;
-    border-radius: 6px;
-    cursor: pointer;
-    text-transform: none;
-    letter-spacing: 0;
-  }
-  .refresh-btn:hover { color: var(--text); }
-  #priorities-text {
-    color: var(--text);
-    font-size: 14px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-  }
-  .quick-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-  .qa-btn {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    color: var(--text);
     font-size: 13px;
-    font-weight: 500;
-    padding: 10px 14px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: border-color .15s, color .15s;
+    margin-top: 4px;
   }
-  .qa-btn:hover { border-color: var(--accent); color: var(--accent); }
-  /* Upload card */
-  .upload-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  .composer-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  textarea,
+  .gate-box input,
+  #upload-file {
+    width: 100%;
+    border-radius: 22px;
+    border: 1px solid var(--border);
+    background: rgba(255, 253, 248, 0.95);
+    color: var(--text);
+    outline: none;
+    transition: border-color .18s ease, box-shadow .18s ease;
+  }
+
+  textarea:focus,
+  .gate-box input:focus,
+  #upload-file:focus {
+    border-color: rgba(200, 106, 68, 0.44);
+    box-shadow: 0 0 0 4px rgba(200, 106, 68, 0.11);
+  }
+
+  textarea {
+    min-height: 104px;
+    max-height: 220px;
+    resize: vertical;
+    padding: 16px 18px;
+    line-height: 1.6;
+  }
+
+  #send,
+  #upload-btn,
+  .draft-send-btn {
+    background: var(--accent);
+    color: #fff7f0;
+    border: 1px solid var(--accent);
+  }
+
+  #send,
+  #mic-btn {
+    min-height: 48px;
+    padding: 0 18px;
+    font-weight: 700;
+  }
+
+  #mic-btn {
+    color: var(--teal);
+    background: var(--teal-soft);
+    border-color: rgba(36, 95, 88, 0.18);
+  }
+
+  #mic-btn.listening {
+    color: #fff5ef;
+    background: var(--danger);
+    border-color: var(--danger);
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(160, 63, 52, 0.25); }
+    50% { box-shadow: 0 0 0 10px rgba(160, 63, 52, 0); }
+  }
+
+  #dashboard {
+    display: none;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 18px;
+    border-radius: 28px;
+    padding: 20px;
+    animation: rise .7s ease;
+  }
+
+  .dash-card {
+    border-radius: 24px;
+    padding: 22px;
+    margin: 0;
+  }
+
+  .dash-priorities,
+  .dash-drafts {
+    grid-column: span 12;
+  }
+
+  .dash-actions,
+  .dash-upload {
+    grid-column: span 6;
+  }
+
+  .dash-card h2 {
+    margin: 0 0 16px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .refresh-btn {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  #priorities-text,
+  #drafts-status,
+  #upload-status {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--muted);
+    min-height: 22px;
+  }
+
+  #priorities-text {
+    white-space: pre-wrap;
+    color: var(--text);
+  }
+
+  .quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .qa-btn {
+    text-align: left;
+    border-radius: 18px;
+    padding: 16px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+
+  .qa-btn:hover,
+  .refresh-btn:hover,
+  .draft-send-btn:hover,
+  .ghost-btn:hover,
+  .voice-toggle:hover,
+  #mic-btn:hover {
+    border-color: rgba(200, 106, 68, 0.28);
+    box-shadow: 0 10px 24px rgba(77, 51, 22, 0.08);
+  }
+
+  .upload-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
   #upload-file {
     flex: 1;
     min-width: 0;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--panel);
-    color: var(--text);
-    font: inherit;
-    font-size: 13px;
+    padding: 13px 16px;
     cursor: pointer;
   }
-  #upload-file:focus { outline: none; border-color: var(--accent); }
+
   #upload-btn {
-    background: var(--accent);
-    color: #0b0d10;
-    font-size: 13px;
-    padding: 8px 16px;
-    border-radius: 8px;
-    white-space: nowrap;
+    min-height: 48px;
+    padding: 0 18px;
   }
-  #upload-status { font-size: 13px; color: var(--muted); min-height: 18px; margin-top: 8px; }
-  /* Drafts card */
+
   .draft-row {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 12px;
-    padding: 10px 0;
+    gap: 14px;
+    padding: 16px 0;
     border-bottom: 1px solid var(--border);
   }
-  .draft-row:last-child { border-bottom: none; }
-  .draft-meta { flex: 1; min-width: 0; }
-  .draft-meta .draft-to { font-size: 12px; color: var(--muted); }
-  .draft-meta .draft-subject { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .draft-meta .draft-snippet { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .draft-send-btn {
-    background: var(--bot);
-    color: #fff;
+
+  .draft-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .draft-meta {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .draft-meta .draft-to {
     font-size: 12px;
-    font-weight: 600;
-    padding: 6px 12px;
-    border-radius: 6px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .draft-meta .draft-subject {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .draft-meta .draft-snippet {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .draft-send-btn {
+    min-height: 42px;
+    padding: 0 16px;
     white-space: nowrap;
     flex-shrink: 0;
+    font-weight: 700;
   }
-  .draft-send-btn:hover { opacity: 0.85; }
-  #drafts-status { font-size: 13px; color: var(--muted); min-height: 18px; }
-  /* Password gate overlay */
+
   #gate {
-    position: fixed; inset: 0;
-    background: var(--bg);
-    display: flex; align-items: center; justify-content: center;
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(242, 234, 223, 0.84);
+    backdrop-filter: blur(16px);
     z-index: 100;
+    padding: 20px;
   }
+
   #gate.hidden { display: none; }
+
   .gate-box {
-    background: var(--panel);
+    width: min(420px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 30px 28px;
+    border-radius: 28px;
+    background: rgba(255, 250, 241, 0.96);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 32px 28px;
-    width: 100%; max-width: 360px;
-    display: flex; flex-direction: column; gap: 14px;
+    box-shadow: var(--shadow);
   }
-  .gate-box h2 { margin: 0; font-size: 18px; }
-  .gate-box p  { margin: 0; color: var(--muted); font-size: 13px; }
+
+  .gate-box h2 {
+    margin: 4px 0 0;
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 2rem;
+    letter-spacing: -0.04em;
+  }
+
+  .gate-box p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
   .gate-box input {
-    padding: 10px 14px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--panel-2);
-    color: var(--text);
-    font: inherit;
-    outline: none;
+    padding: 14px 16px;
   }
-  .gate-box input:focus { border-color: var(--accent); }
-  .gate-box .gate-err { color: #ffb4b4; font-size: 13px; min-height: 18px; }
+
+  #gate-btn {
+    min-height: 48px;
+    background: var(--text);
+    color: #fff8f0;
+  }
+
+  .gate-err {
+    min-height: 20px;
+    color: var(--danger);
+    font-size: 13px;
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (max-width: 980px) {
+    header,
+    .hero-band {
+      grid-template-columns: 1fr;
+      flex-direction: column;
+    }
+
+    .control-panel {
+      width: 100%;
+    }
+
+    .hero-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .dash-actions,
+    .dash-upload {
+      grid-column: span 12;
+    }
+  }
+
+  @media (max-width: 860px) {
+    body {
+      padding: 18px 16px 28px;
+    }
+
+    header {
+      padding: 22px;
+      gap: 18px;
+    }
+
+    .brand-copy,
+    .hero-copy p {
+      max-width: none;
+    }
+
+    .hero-copy {
+      padding: 22px;
+    }
+
+    .hero-copy h2 {
+      max-width: none;
+      font-size: clamp(1.7rem, 6vw, 2.4rem);
+    }
+
+    .actions {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .voice-toggle {
+      grid-column: 1 / -1;
+    }
+
+    #chat {
+      min-height: 380px;
+      padding: 20px;
+    }
+
+    form {
+      padding: 20px;
+    }
+
+    .composer-head,
+    .draft-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .composer-actions {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #mic-btn,
+    #send {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .quick-actions {
+      grid-template-columns: 1fr;
+    }
+
+    #tabs {
+      width: 100%;
+      justify-content: stretch;
+    }
+
+    .tab {
+      flex: 1;
+      text-align: center;
+    }
+  }
+
+  @media (max-width: 720px) {
+    body {
+      padding: 14px 12px 24px;
+    }
+
+    header,
+    .hero-copy,
+    #chat-workspace,
+    #dashboard,
+    .dash-card,
+    .gate-box {
+      border-radius: 22px;
+    }
+
+    header,
+    .hero-copy,
+    .dash-card,
+    .gate-box {
+      padding: 20px;
+    }
+
+    .brand-row {
+      align-items: flex-start;
+    }
+
+    .brand-badge {
+      align-self: flex-start;
+    }
+
+    .brand-copy,
+    .composer-subtitle,
+    .gate-box p {
+      font-size: 12px;
+    }
+
+    .actions {
+      grid-template-columns: 1fr;
+    }
+
+    .voice-toggle {
+      grid-column: auto;
+    }
+
+    #chat {
+      min-height: 340px;
+      padding: 18px;
+    }
+
+    form {
+      padding: 18px;
+    }
+
+    .actions,
+    .composer-actions,
+    .quick-actions,
+    .upload-row {
+      width: 100%;
+    }
+
+    .composer-title {
+      font-size: 16px;
+    }
+
+    .composer-actions {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .quick-actions {
+      grid-template-columns: 1fr;
+    }
+
+    .ghost-btn,
+    .voice-toggle,
+    #mic-btn,
+    #send,
+    #upload-btn,
+    .draft-send-btn {
+      width: 100%;
+      justify-content: center;
+    }
+
+    #tabs {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .tab {
+      flex: 1;
+    }
+
+    .msg-row {
+      max-width: 100%;
+    }
+
+    .msg {
+      padding: 14px 16px;
+      border-radius: 18px;
+    }
+  }
 </style>
 </head>
 <body>
 <div id="gate">
   <div class="gate-box">
-    <h2>🔒 AI Me</h2>
-    <p>Enter your password to continue.</p>
+    <span class="gate-kicker">Secure Entry</span>
+    <h2>AI Me</h2>
+    <p>Unlock the command center to use chat, dashboard actions, drafts, and voice controls.</p>
     <input id="gate-pw" type="password" placeholder="Password" autofocus />
     <button id="gate-btn">Unlock</button>
     <div class="gate-err" id="gate-err"></div>
   </div>
 </div>
 
-<header>
-  <h1>🤖 AI Me — Wesley</h1>
-  <div class="actions">
-    <span class="status" id="status">thread: <span id="tid">—</span></span>
-    <button onclick="newThread()">New chat</button>
-    <button id="mute-btn" onclick="toggleMute()" title="Toggle voice output">🔊</button>
-    <button onclick="logout()">Logout</button>
-  </div>
-</header>
-
-<nav id="tabs">
-  <button id="tab-chat" class="tab active" onclick="showTab('chat')">💬 Chat</button>
-  <button id="tab-dash" class="tab" onclick="showTab('dash')">📊 Dashboard</button>
-</nav>
-
-<div id="chat"></div>
-
-<div id="dashboard">
-  <div class="dash-card">
-    <h2>Today's Priorities <button class="refresh-btn" onclick="refreshPriorities()">↻ Refresh</button></h2>
-    <div id="priorities-text">—</div>
-  </div>
-  <div class="dash-card">
-    <h2>Quick Actions</h2>
-    <div class="quick-actions">
-      <button class="qa-btn" onclick="quickAction('Log interview for ')">📋 Log Interview</button>
-      <button class="qa-btn" onclick="quickAction('Log ministering for ')">🏠 Log Ministering</button>
-      <button class="qa-btn" onclick="quickAction('Protect family time: ')">👨‍👩‍👧‍👦 Protect Family Time</button>
-      <button class="qa-btn" onclick="quickAction('Create calendar event: ')">📅 Add Calendar Event</button>
-      <button class="qa-btn" onclick="quickAction('Set a reminder for ')">⏰ Set Reminder</button>
+<div class="app-shell">
+  <header>
+    <div class="brand-block">
+      <span class="brand-kicker">Wesley's Personal Command Center</span>
+      <div class="brand-row">
+        <h1>AI Me</h1>
+        <span class="brand-badge">Calendar • Gmail • SMS</span>
+      </div>
+      <p class="brand-copy">A cleaner front end for the same assistant: faster chat, clearer quick actions, and a voice toggle you do not have to hunt for.</p>
     </div>
-  </div>
-  <div class="dash-card">
-    <h2>Upload Note to Memory</h2>
-    <div class="upload-row">
-      <input id="upload-file" type="file" accept=".txt,.md" />
-      <button id="upload-btn" type="button" onclick="uploadNote()">⬆ Upload</button>
+    <div class="control-panel">
+      <div id="status">
+        <span class="status-label">Active Thread</span>
+        <span class="status-value" id="tid">—</span>
+      </div>
+      <div class="actions">
+        <button class="ghost-btn" onclick="newThread()">New Chat</button>
+        <button id="mute-btn" class="voice-toggle" onclick="toggleMute()" title="Toggle voice output">Voice Replies On</button>
+        <button class="ghost-btn danger-btn" onclick="logout()">Logout</button>
+      </div>
     </div>
-    <div id="upload-status"></div>
+  </header>
+
+  <section class="hero-band">
+    <div class="hero-copy">
+      <span class="hero-kicker">Operating System</span>
+      <h2>Type when you can. Talk when you need to. Keep the noise down.</h2>
+      <p>Chat stays focused, the dashboard stays useful, and spoken replies can be shut off with one clear switch in the header.</p>
+    </div>
+    <div class="hero-stats">
+      <div class="note-card">
+        <span>Voice Input</span>
+        <strong>Tap Talk</strong>
+        <p>Dictate directly into chat when typing is slow.</p>
+      </div>
+      <div class="note-card">
+        <span>Voice Output</span>
+        <strong>Header Toggle</strong>
+        <p>Mute spoken replies instantly without disabling the mic.</p>
+      </div>
+      <div class="note-card">
+        <span>Dashboard</span>
+        <strong>Quick Actions</strong>
+        <p>Jump into reminders, drafts, memory, and calendar actions fast.</p>
+      </div>
+    </div>
+  </section>
+
+  <nav id="tabs">
+    <button id="tab-chat" class="tab active" onclick="showTab('chat')">Chat</button>
+    <button id="tab-dash" class="tab" onclick="showTab('dash')">Dashboard</button>
+  </nav>
+
+  <div id="chat-workspace">
+    <div id="chat"></div>
+
+    <form id="form">
+      <div class="composer-head">
+        <div>
+          <span class="composer-label">Message Me</span>
+          <div class="composer-title">Say it directly.</div>
+          <div class="composer-subtitle">Shift+Enter for a new line. Tap Talk for voice input.</div>
+        </div>
+        <div class="composer-actions">
+          <button id="mic-btn" type="button" onclick="startVoiceInput()" title="Voice input">Talk</button>
+          <button id="send" type="submit">Send</button>
+        </div>
+      </div>
+      <textarea id="input" placeholder="Ask about schedule, drafts, reminders, priorities, or whatever else needs handling." autofocus></textarea>
+    </form>
   </div>
-  <div class="dash-card">
-    <h2>Gmail Drafts <button class="refresh-btn" onclick="loadDrafts()">↻ Refresh</button></h2>
-    <div id="drafts-status"></div>
-    <div id="drafts-list"></div>
+
+  <div id="dashboard">
+    <div class="dash-card dash-priorities">
+      <h2>Today's Priorities <button class="refresh-btn" onclick="refreshPriorities()">Refresh</button></h2>
+      <div id="priorities-text">—</div>
+    </div>
+    <div class="dash-card dash-actions">
+      <h2>Quick Actions</h2>
+      <div class="quick-actions">
+        <button class="qa-btn" onclick="quickAction('Log interview for ')">Log interview</button>
+        <button class="qa-btn" onclick="quickAction('Log ministering for ')">Log ministering</button>
+        <button class="qa-btn" onclick="quickAction('Protect family time: ')">Protect family time</button>
+        <button class="qa-btn" onclick="quickAction('Create calendar event: ')">Add calendar event</button>
+        <button class="qa-btn" onclick="quickAction('Set a reminder for ')">Set reminder</button>
+      </div>
+    </div>
+    <div class="dash-card dash-upload">
+      <h2>Upload Note to Memory</h2>
+      <div class="upload-row">
+        <input id="upload-file" type="file" accept=".txt,.md" />
+        <button id="upload-btn" type="button" onclick="uploadNote()">Upload</button>
+      </div>
+      <div id="upload-status"></div>
+    </div>
+    <div class="dash-card dash-drafts">
+      <h2>Gmail Drafts <button class="refresh-btn" onclick="loadDrafts()">Refresh</button></h2>
+      <div id="drafts-status"></div>
+      <div id="drafts-list"></div>
+    </div>
   </div>
 </div>
-
-<form id="form">
-  <textarea id="input" placeholder="Ask Me anything... (Shift+Enter for newline)" autofocus></textarea>
-  <button id="mic-btn" type="button" onclick="startVoiceInput()" title="Voice input">🎤</button>
-  <button id="send" type="submit">Send</button>
-</form>
 
 <script>
   // --- Auth gate ---
@@ -409,6 +1087,7 @@
 
   // --- Chat ---
   const chat = document.getElementById("chat");
+  const chatWorkspace = document.getElementById("chat-workspace");
   const form = document.getElementById("form");
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("send");
@@ -423,16 +1102,27 @@
     localStorage.setItem("aime_thread", threadId);
     tidEl.textContent = threadId.slice(0, 8);
     chat.innerHTML = "";
+    showTab("chat");
     addMsg("bot", "New conversation started. What's up?");
   }
 
   function addMsg(role, text) {
-    const div = document.createElement("div");
-    div.className = "msg " + role;
-    div.textContent = text;
-    chat.appendChild(div);
+    const row = document.createElement("div");
+    row.className = "msg-row " + role;
+
+    const meta = document.createElement("div");
+    meta.className = "msg-meta";
+    meta.textContent = role === "user" ? "You" : role === "bot" ? "AI Me" : "System";
+
+    const bubble = document.createElement("div");
+    bubble.className = "msg " + role;
+    bubble.textContent = text;
+
+    row.appendChild(meta);
+    row.appendChild(bubble);
+    chat.appendChild(row);
     chat.scrollTop = chat.scrollHeight;
-    return div;
+    return row;
   }
 
   input.addEventListener("keydown", (e) => {
@@ -449,8 +1139,8 @@
     addMsg("user", text);
     input.value = "";
     sendBtn.disabled = true;
-    const typing = addMsg("bot", "…");
-    typing.classList.add("typing");
+    const typing = addMsg("bot", "Working...");
+    typing.querySelector(".msg").classList.add("typing");
 
     try {
       const res = await fetch("/chat", {
@@ -486,11 +1176,15 @@
   // --- Mute toggle ---
   const muteBtn = document.getElementById("mute-btn");
   let muted = localStorage.getItem("aime_muted") === "true";
-  function updateMuteBtn() { muteBtn.textContent = muted ? "🔇" : "🔊"; }
+  function updateMuteBtn() {
+    muteBtn.textContent = muted ? "Voice Replies Off" : "Voice Replies On";
+    muteBtn.classList.toggle("muted", muted);
+    muteBtn.setAttribute("aria-pressed", String(muted));
+  }
   function toggleMute() {
     muted = !muted;
     localStorage.setItem("aime_muted", muted);
-    if (muted) speechSynthesis.cancel();
+    if (muted && window.speechSynthesis) speechSynthesis.cancel();
     updateMuteBtn();
   }
   updateMuteBtn();
@@ -522,6 +1216,12 @@
 
   // --- Voice input ---
   const micBtn = document.getElementById("mic-btn");
+
+  function setMicState(listening) {
+    micBtn.classList.toggle("listening", listening);
+    micBtn.textContent = listening ? "Listening..." : "Talk";
+  }
+
   function startVoiceInput() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
@@ -533,35 +1233,34 @@
     recognition.lang = "en-US";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
-    micBtn.classList.add("listening");
+    setMicState(true);
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
       input.value = transcript;
       form.requestSubmit();
     };
-    recognition.onerror = () => { micBtn.classList.remove("listening"); };
-    recognition.onend  = () => { micBtn.classList.remove("listening"); };
+    recognition.onerror = () => { setMicState(false); };
+    recognition.onend  = () => { setMicState(false); };
     recognition.start();
   }
 
+  setMicState(false);
+
   // --- Tabs ---
-  const chatPanel = document.getElementById("chat");
-  const formPanel = document.getElementById("form");
   const dashPanel = document.getElementById("dashboard");
   const tabChat   = document.getElementById("tab-chat");
   const tabDash   = document.getElementById("tab-dash");
 
   function showTab(tab) {
     if (tab === "dash") {
-      chatPanel.style.display = "none";
-      formPanel.style.display = "none";
-      dashPanel.style.display = "block";
+      chatWorkspace.style.display = "none";
+      dashPanel.style.display = "grid";
       tabChat.classList.remove("active");
       tabDash.classList.add("active");
       loadPriorities();
+      loadDrafts();
     } else {
-      chatPanel.style.display = "";
-      formPanel.style.display = "";
+      chatWorkspace.style.display = "flex";
       dashPanel.style.display = "none";
       tabChat.classList.add("active");
       tabDash.classList.remove("active");
@@ -664,7 +1363,7 @@
   }
 
   function escHtml(s) {
-    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
   // --- Upload note ---

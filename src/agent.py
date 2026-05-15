@@ -16,6 +16,7 @@ from src.tools.email import search_emails, get_email_content, create_draft, crea
 from src.tools.responsibilities import get_my_responsibilities, log_interview, log_ministering, protect_family_time, suggest_family_time
 from src.tools.reminders import set_reminder
 from src.tools.google_docs import read_google_doc
+from src.tools.drive import search_drive, list_drive_folder
 from src.tools.github import analyze_repo, repo_overview
 from src.tools.work import get_work_priorities
 from src.tools.site_stats import (
@@ -122,6 +123,8 @@ def build_me_agent():
         protect_family_time,
         set_reminder,
         read_google_doc,
+        search_drive,
+        list_drive_folder,
         analyze_repo,
         repo_overview,
         get_work_priorities,
