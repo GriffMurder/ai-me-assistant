@@ -286,7 +286,8 @@ async def diagnostics():
 
     # --- Google ---
     try:
-        from src.auth.google_auth import load_creds
+        from src.auth.google_auth import SCOPES, _load_token_dict, load_creds, missing_required_scopes
+        token_data = _load_token_dict()
         creds = load_creds()
         result["google"] = {
             "token_present": True,
@@ -294,9 +295,21 @@ async def diagnostics():
             "expired": creds.expired,
             "has_refresh_token": bool(creds.refresh_token),
             "scopes": list(creds.scopes or []),
+            "required_scopes": SCOPES,
+            "missing_scopes": missing_required_scopes(token_data),
         }
     except Exception as e:
-        result["google"] = {"token_present": False, "error": str(e)}
+        try:
+            from src.auth.google_auth import SCOPES, _load_token_dict, missing_required_scopes
+            token_data = _load_token_dict()
+            result["google"] = {
+                "token_present": bool(token_data),
+                "required_scopes": SCOPES,
+                "missing_scopes": missing_required_scopes(token_data),
+                "error": str(e),
+            }
+        except Exception as status_error:
+            result["google"] = {"token_present": False, "error": str(e), "status_error": str(status_error)}
 
     # --- Twilio ---
     from src.tools.sms import _twilio_configured

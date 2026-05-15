@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -15,6 +16,7 @@ load_dotenv()
 
 # All scopes the app needs. Single source of truth.
 SCOPES = [
+    "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
@@ -25,6 +27,23 @@ SCOPES = [
 
 TOKEN_FILE = Path("token.json")
 _supabase = None
+
+
+def _token_scopes(data: dict) -> set[str]:
+    scopes = data.get("scopes") or data.get("scope") or []
+    if isinstance(scopes, str):
+        return set(scopes.split())
+    return set(scopes)
+
+
+def missing_required_scopes(data: dict | None) -> list[str]:
+    """Return required scopes absent from a stored token, if scope data exists."""
+    if not data:
+        return SCOPES[:]
+    granted = _token_scopes(data)
+    if not granted:
+        return []
+    return [scope for scope in SCOPES if scope not in granted]
 
 
 def _get_supabase():
@@ -78,9 +97,21 @@ def load_creds() -> Credentials:
         raise RuntimeError(
             "No Google token stored. Visit /auth/google to authorize."
         )
+    missing_scopes = missing_required_scopes(data)
+    if missing_scopes:
+        raise RuntimeError(
+            "Google token is missing required scopes. Visit /auth/google to re-authorize. "
+            f"Missing scopes: {', '.join(missing_scopes)}"
+        )
     creds = Credentials.from_authorized_user_info(data, SCOPES)
     if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+        try:
+            creds.refresh(Request())
+        except RefreshError as e:
+            raise RuntimeError(
+                "Google token refresh failed. Visit /auth/google to re-authorize. "
+                f"Google said: {e}"
+            ) from e
         _save_token_dict(json.loads(creds.to_json()))
     return creds
 

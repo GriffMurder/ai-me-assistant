@@ -12,8 +12,24 @@ services:
         sync: false
       - key: SUPABASE_DB_URL
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: GOOGLE_CREDENTIALS_PATH
         value: credentials.json
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      - key: MY_PHONE_NUMBER
+        sync: false
       - key: APP_PASSWORD
         sync: false
       - key: PYTHON_VERSION
