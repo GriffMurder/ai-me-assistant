@@ -100,10 +100,7 @@ def load_creds() -> Credentials:
         )
     missing_scopes = missing_required_scopes(data)
     if missing_scopes:
-        raise RuntimeError(
-            "Google token is missing required scopes. Visit /auth/google to re-authorize. "
-            f"Missing scopes: {', '.join(missing_scopes)}"
-        )
+        print(f"⚠️  Google token missing scopes (non-blocking, re-auth to unlock): {', '.join(s.split('/')[-1] for s in missing_scopes)}")
     creds = Credentials.from_authorized_user_info(data, SCOPES)
     if creds.expired and creds.refresh_token:
         try:
