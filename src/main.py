@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import base64
 import re
 import sys
+import asyncio
 import os
 import uuid
 import traceback
@@ -91,14 +92,32 @@ class ChatRequest(BaseModel):
     message: str
     thread_id: str = None  # For memory persistence
 
+@app.get("/ping")
+async def ping():
+    """Public liveness check — call this first to wake the server before sending a chat message."""
+    return {"alive": True}
+
+
 @app.post("/chat", dependencies=[Depends(verify_owner)])
 async def chat(request: ChatRequest):
     """Talk to your AI Me with memory"""
     thread_id = request.thread_id or str(uuid.uuid4())
     try:
-        result = get_me_agent().invoke(
-            {"messages": [{"role": "user", "content": request.message}]},
-            config={"configurable": {"thread_id": thread_id}}
+        loop = asyncio.get_event_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: get_me_agent().invoke(
+                    {"messages": [{"role": "user", "content": request.message}]},
+                    config={"configurable": {"thread_id": thread_id}},
+                ),
+            ),
+            timeout=90,  # 90 s — enough for multi-tool chains, under Render's hard limit
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail={"error": "Request timed out after 90 seconds. The server may be waking up — try again."},
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail={"error": str(e), "trace": traceback.format_exc()})

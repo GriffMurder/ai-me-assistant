@@ -1153,10 +1153,16 @@
     addMsg("user", text);
     input.value = "";
     sendBtn.disabled = true;
-    const typing = addMsg("bot", "Working...");
+    const typing = addMsg("bot", "Waking up…");
     typing.querySelector(".msg").classList.add("typing");
 
     try {
+      // Ping first so the user sees a meaningful status while the server cold-starts
+      try {
+        const ping = await fetch("/ping", { signal: AbortSignal.timeout(55000) });
+        if (ping.ok) typing.querySelector(".msg").textContent = "Working…";
+      } catch (_) { /* server still waking — chat request will carry on anyway */ }
+
       const res = await fetch("/chat", {
         method: "POST",
         headers: {
@@ -1164,12 +1170,15 @@
           "Authorization": "Bearer " + authToken,
         },
         body: JSON.stringify({ message: text, thread_id: threadId }),
+        signal: AbortSignal.timeout(100000),
       });
       const data = await res.json();
       typing.remove();
       if (res.status === 401) {
         logout();
         addMsg("error", "Session expired. Please log in again.");
+      } else if (res.status === 504) {
+        addMsg("error", "Timed out — server is waking up. Try again in a few seconds.");
       } else if (!res.ok) {
         addMsg("error", "Error: " + (data.detail?.error || JSON.stringify(data)));
       } else {
@@ -1178,7 +1187,11 @@
       }
     } catch (err) {
       typing.remove();
-      addMsg("error", "Network error: " + err.message);
+      if (err.name === "TimeoutError") {
+        addMsg("error", "Request timed out — server may still be waking up. Try again.");
+      } else {
+        addMsg("error", "Network error: " + err.message);
+      }
     } finally {
       sendBtn.disabled = false;
       input.focus();
