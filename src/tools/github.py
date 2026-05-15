@@ -252,7 +252,7 @@ def create_pull_request(
             base=base_branch,
         )
         return (
-            f"✅ PR #{pr.number} opened: "{pr.title}"\n"
+            f'✅ PR #{pr.number} opened: "{pr.title}"\n'
             f"URL: {pr.html_url}"
         )
     except Exception as e:

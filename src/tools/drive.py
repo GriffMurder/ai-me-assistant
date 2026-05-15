@@ -57,9 +57,9 @@ def search_drive(query: str, limit: int = 20) -> str:
         ).execute()
         files = results.get("files", [])
         if not files:
-            return f"No Drive files found matching "{query}"."
+            return f'No Drive files found matching "{query}".' 
 
-        lines = [f"🔍 Drive search: "{query}" — {len(files)} result(s)\n"]
+        lines = [f'🔍 Drive search: "{query}" — {len(files)} result(s)\n']
         for f in files:
             modified = f.get("modifiedTime", "")[:10]
             label = _label(f.get("mimeType", ""))
@@ -116,7 +116,7 @@ def list_drive_folder(folder_id_or_name: str = "root", limit: int = 50) -> str:
                 ).execute()
                 found = res.get("files", [])
                 if not found:
-                    return f"❌ No folder named "{raw}" found in Drive."
+                    return f'❌ No folder named "{raw}" found in Drive.'
                 folder_id = found[0]["id"]
                 display_name = found[0]["name"]
 
@@ -133,7 +133,7 @@ def list_drive_folder(folder_id_or_name: str = "root", limit: int = 50) -> str:
         files = results.get("files", [])
 
         if not files:
-            return f"📁 "{display_name}" is empty."
+            return f'📁 "{display_name}" is empty.'
 
         lines = [f"📁 {display_name} — {len(files)} item(s)\n"]
         for f in files:
