@@ -93,12 +93,15 @@ def _get_supabase():
 def _load_token_dict():
     """Load token JSON dict from Supabase (preferred) or local file."""
     sb = _get_supabase()
-    if sb is not None:
+    if sb is None:
+        print("⚠️  Supabase not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing) — falling back to local file.")
+    else:
         try:
             resp = sb.table("google_token").select("token_json").eq("id", 1).execute()
             rows = resp.data or []
             if rows:
                 return json.loads(rows[0]["token_json"])
+            print("⚠️  Supabase google_token table has no row yet — visit /auth/google to authorize.")
         except Exception as e:
             print(f"⚠️  Supabase google_token read failed: {e}")
     # Fallback: local file (dev)

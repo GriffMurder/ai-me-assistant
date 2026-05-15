@@ -233,7 +233,13 @@ async def api_status():
 @app.get("/health")
 async def health():
     """Public health check — minimal to avoid leaking config info."""
-    return {"status": "ok"}
+    from src.auth.google_auth import has_token
+    authorized = has_token()
+    return {
+        "status": "ok",
+        "google_authorized": authorized,
+        "google_action": None if authorized else "Visit /auth/google to authorize",
+    }
 
 
 @app.get("/health/full", dependencies=[Depends(verify_owner)])
