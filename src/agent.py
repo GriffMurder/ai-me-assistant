@@ -17,7 +17,7 @@ from src.tools.responsibilities import get_my_responsibilities, log_interview, l
 from src.tools.reminders import set_reminder
 from src.tools.google_docs import read_google_doc
 from src.tools.drive import search_drive, list_drive_folder
-from src.tools.github import analyze_repo, repo_overview
+from src.tools.github import analyze_repo, repo_overview, read_repo_file, write_repo_file, create_repo_branch, create_pull_request
 from src.tools.work import get_work_priorities
 from src.tools.site_stats import (
     get_ops_dashboard,
@@ -127,6 +127,10 @@ def build_me_agent():
         list_drive_folder,
         analyze_repo,
         repo_overview,
+        read_repo_file,
+        write_repo_file,
+        create_repo_branch,
+        create_pull_request,
         get_work_priorities,
         suggest_family_time,
         get_ops_dashboard,
