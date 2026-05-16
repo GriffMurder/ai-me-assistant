@@ -34,3 +34,13 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: 3.12.3
+      - key: OPS_URL
+        sync: false
+      - key: TASKBULLET_URL
+        sync: false
+      - key: ORCARW_URL
+        sync: false
+      - key: RETURNFLOW_URL
+        sync: false
+      - key: ADMIN_STATS_KEY
+        sync: false

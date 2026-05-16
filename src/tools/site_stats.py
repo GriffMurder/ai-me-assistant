@@ -35,8 +35,8 @@ def _fetch_stats(site_label: str, url_env_var: str) -> str:
     except Exception as e:
         return f"❌ {site_label}: request failed ({type(e).__name__}: {e})"
 
-    if r.status_code == 401:
-        return f"❌ {site_label}: unauthorized — ADMIN_STATS_KEY mismatch between this assistant and {site_label}"
+    if r.status_code == 401 or r.status_code == 403:
+        return f"❌ {site_label}: unauthorized (HTTP {r.status_code}) — ADMIN_STATS_KEY in Render doesn't match the key {site_label} expects. Update it in Render → Environment."
     if r.status_code == 404:
         return f"❌ {site_label}: /api/admin/stats not found — endpoint not deployed yet"
     if r.status_code >= 500:
