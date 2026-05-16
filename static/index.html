@@ -1033,6 +1033,10 @@
         <button class="qa-btn" onclick="sendQuick('Show me all open GitHub PRs across my repos.')">GitHub PRs</button>
       </div>
     </div>
+    <div class="dash-card">
+      <h2>System Status <button class="refresh-btn" onclick="loadSystemStatus()">Check</button></h2>
+      <div id="system-status-list"><span style="color:var(--muted);font-size:.85rem">Click Check to run heartbeat</span></div>
+    </div>
     <div class="dash-card dash-upload">
       <h2>Upload Note to Memory</h2>
       <div class="upload-row">
@@ -1332,6 +1336,25 @@
   function refreshPriorities() { loadPriorities(true); }
 
   // --- Drafts card ---
+  async function loadSystemStatus() {
+    const el = document.getElementById("system-status-list");
+    el.textContent = "Checking…";
+    try {
+      const res = await fetch("/health/full", {
+        headers: { "Authorization": "Bearer " + authToken },
+      });
+      const data = await res.json();
+      if (!res.ok) { el.textContent = "❌ " + (data.detail || "Failed"); return; }
+      const icons = { "set": "✅", "installed": "✅", "MISSING": "❌", "present": "✅" };
+      el.innerHTML = Object.entries(data).map(([k, v]) => {
+        const icon = icons[v] || (v && v !== "MISSING" ? "✅" : "❌");
+        return `<div style="font-size:.82rem;padding:2px 0"><span>${icon}</span> <strong>${k}</strong>: ${v}</div>`;
+      }).join("");
+    } catch (e) {
+      el.textContent = "❌ Network error: " + e.message;
+    }
+  }
+
   async function loadDrafts() {
     const list   = document.getElementById("drafts-list");
     const status = document.getElementById("drafts-status");
