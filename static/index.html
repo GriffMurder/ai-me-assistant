@@ -1206,7 +1206,7 @@
 
   // --- Mute toggle ---
   const muteBtn = document.getElementById("mute-btn");
-  let muted = localStorage.getItem("aime_muted") === "true";
+  let muted = localStorage.getItem("aime_muted") !== "false";
   function updateMuteBtn() {
     muteBtn.textContent = muted ? "Voice Replies Off" : "Voice Replies On";
     muteBtn.classList.toggle("muted", muted);
