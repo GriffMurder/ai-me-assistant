@@ -797,10 +797,11 @@
     .composer-actions {
       width: 100%;
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     #mic-btn,
+    #mute-btn,
     #send {
       width: 100%;
       justify-content: center;
@@ -885,7 +886,7 @@
     }
 
     .composer-actions {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .quick-actions {
@@ -951,7 +952,6 @@
       </div>
       <div class="actions">
         <button class="ghost-btn" onclick="newThread()">New Chat</button>
-        <button id="mute-btn" class="voice-toggle" onclick="toggleMute()" title="Toggle voice output">Voice Replies On</button>
         <button class="ghost-btn danger-btn" onclick="logout()">Logout</button>
       </div>
     </div>
@@ -999,6 +999,7 @@
         </div>
         <div class="composer-actions">
           <button id="mic-btn" type="button" onclick="startVoiceInput()" title="Voice input">Talk</button>
+          <button id="mute-btn" class="voice-toggle" type="button" onclick="toggleMute()" title="Toggle voice output">🔇 Voice Off</button>
           <button id="send" type="submit">Send</button>
         </div>
       </div>
@@ -1208,7 +1209,7 @@
   const muteBtn = document.getElementById("mute-btn");
   let muted = localStorage.getItem("aime_muted") !== "false";
   function updateMuteBtn() {
-    muteBtn.textContent = muted ? "Voice Replies Off" : "Voice Replies On";
+    muteBtn.textContent = muted ? "🔇 Voice Off" : "🔊 Voice On";
     muteBtn.classList.toggle("muted", muted);
     muteBtn.setAttribute("aria-pressed", String(muted));
   }
