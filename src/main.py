@@ -599,14 +599,17 @@ async def ingest_social_videos(
                 def error(self, msg):
                     ydl_log.append(f"ERR: {msg}")
 
-            # Write YouTube cookies from env var if present
+            # Write social cookies from env var if present (covers YouTube + Facebook)
             cookie_file: str | None = None
-            yt_cookies_b64 = os.environ.get("YOUTUBE_COOKIES_B64", "").strip()
-            if yt_cookies_b64:
+            social_cookies_b64 = (
+                os.environ.get("SOCIAL_COOKIES_B64", "") or
+                os.environ.get("YOUTUBE_COOKIES_B64", "")
+            ).strip()
+            if social_cookies_b64:
                 import base64 as _b64
                 cookie_file = os.path.join(tmpdir, "yt_cookies.txt")
                 with open(cookie_file, "wb") as cf:
-                    cf.write(_b64.b64decode(yt_cookies_b64))
+                    cf.write(_b64.b64decode(social_cookies_b64))
 
             ydl_opts = {
                 # Prefer m4a (native YouTube audio) so we don't need ffmpeg to
