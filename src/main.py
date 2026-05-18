@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, FileResponse, RedirectResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -95,8 +95,9 @@ class ChatRequest(BaseModel):
 class BlogRequest(BaseModel):
     topic: str
     keywords: list[str] = []
-    notes: str = ""          # extra context/direction
-    word_count: int = 600    # target length
+    notes: str = ""           # extra context/direction, or Wesley's answers to needs_input questions
+    word_count: int = 600     # target length
+    callback_url: str = ""    # if set, return immediately and POST result here when done
 
 @app.get("/ping")
 async def ping():
@@ -135,103 +136,139 @@ async def chat(request: ChatRequest):
 
 
 @app.post("/generate/blog", dependencies=[Depends(verify_owner)])
-async def generate_blog(request: BlogRequest):
+async def generate_blog(request: BlogRequest, background_tasks: BackgroundTasks):
     """Generate a blog post in Wesley's voice.
 
     First checks RAG memory for Wesley's existing opinions/content on the topic.
     If context is thin and no notes are provided, returns questions for Wesley
     to answer before generating (status: 'needs_input').
-    Once notes are provided, generates the post grounded in his actual voice.
+
+    If callback_url is set, returns immediately with {"status": "processing", "job_id": "..."}
+    and POSTs the finished result to that URL when done. Otherwise, waits synchronously.
     """
     from src.agent import SYSTEM_PROMPT
     from src.memory.rag_memory import retrieve_relevant_memory
     from langchain_xai import ChatXAI
     from langchain_core.messages import SystemMessage, HumanMessage
 
-    try:
-        llm = ChatXAI(model="grok-3-latest")
-        loop = asyncio.get_event_loop()
+    async def _run_generation(req: BlogRequest, job_id: str, callback: str):
+        """Core generation logic — runs inline (sync) or as a background task."""
+        import httpx
 
-        # Step 1: Check RAG memory for Wesley's existing content on this topic
-        context = ""
+        async def _post_callback(payload: dict):
+            if not callback:
+                return
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    await client.post(callback, json=payload)
+            except Exception:
+                pass  # best-effort delivery
+
         try:
-            context = await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: retrieve_relevant_memory(request.topic, k=5)),
-                timeout=10,
-            )
-        except Exception:
-            context = ""  # RAG unavailable — proceed without it
+            llm = ChatXAI(model="grok-3-latest")
+            loop = asyncio.get_event_loop()
 
-        context_is_thin = len(context.strip()) < 300
+            # Check RAG memory for Wesley's existing content on this topic
+            context = ""
+            try:
+                context = await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: retrieve_relevant_memory(req.topic, k=5)),
+                    timeout=10,
+                )
+            except Exception:
+                context = ""
 
-        # Step 2: If no existing content and no notes from Wesley, ask him first
-        if context_is_thin and not request.notes:
-            q_prompt = (
-                f"I need to write a blog post about: '{request.topic}'\n"
-                f"I don't have enough of my own content on this topic yet. "
-                f"Generate 3-4 short, specific questions to ask me so the post reflects my actual "
-                f"experience and opinions — not generic advice. Return ONLY a JSON array of question strings, "
-                f"nothing else. Example: [\"What's your personal experience with X?\", ...]"
+            context_is_thin = len(context.strip()) < 300
+
+            # If no existing content and no notes from Wesley, ask him first
+            if context_is_thin and not req.notes:
+                q_prompt = (
+                    f"I need to write a blog post about: '{req.topic}'\n"
+                    f"I don't have enough of my own content on this topic yet. "
+                    f"Generate 3-4 short, specific questions to ask me so the post reflects my actual "
+                    f"experience and opinions — not generic advice. Return ONLY a JSON array of question strings."
+                )
+                q_result = await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: llm.invoke([
+                        SystemMessage(content=SYSTEM_PROMPT),
+                        HumanMessage(content=q_prompt),
+                    ])),
+                    timeout=30,
+                )
+                import json as _json
+                raw_q = q_result.content.strip()
+                if raw_q.startswith("```"):
+                    raw_q = re.sub(r"^```[a-z]*\n?", "", raw_q).rstrip("` \n")
+                try:
+                    questions = _json.loads(raw_q)
+                except Exception:
+                    questions = [raw_q]
+                payload = {
+                    "status": "needs_input",
+                    "job_id": job_id,
+                    "topic": req.topic,
+                    "questions": questions,
+                    "instructions": "Answer these questions and resubmit with your answers in the 'notes' field.",
+                }
+                await _post_callback(payload)
+                return payload
+
+            # Generate the post grounded in Wesley's actual content
+            kw_line = f"\nKeywords to work in naturally: {', '.join(req.keywords)}" if req.keywords else ""
+            notes_line = f"\nWesley's direct input on this topic:\n{req.notes}" if req.notes else ""
+            context_line = f"\n\nRelevant context from Wesley's existing content:\n{context}" if context.strip() else ""
+
+            prompt = (
+                f"Write a blog post for taskbullet.com in my voice.\n"
+                f"Topic: {req.topic}{kw_line}{notes_line}{context_line}\n"
+                f"Target length: ~{req.word_count} words.\n\n"
+                f"Ground the post in the real context and opinions above — don't invent takes I haven't expressed. "
+                f"Format: compelling title on line 1 (no 'Title:' prefix), blank line, then the post body. "
+                f"No meta-commentary. Just the title and post."
             )
-            q_result = await asyncio.wait_for(
+
+            result = await asyncio.wait_for(
                 loop.run_in_executor(None, lambda: llm.invoke([
                     SystemMessage(content=SYSTEM_PROMPT),
-                    HumanMessage(content=q_prompt),
+                    HumanMessage(content=prompt),
                 ])),
-                timeout=30,
+                timeout=60,
             )
-            import json as _json
-            raw_q = q_result.content.strip()
-            # Strip markdown code fences if present
-            if raw_q.startswith("```"):
-                raw_q = re.sub(r"^```[a-z]*\n?", "", raw_q).rstrip("` \n")
-            try:
-                questions = _json.loads(raw_q)
-            except Exception:
-                questions = [raw_q]
-            return {
-                "status": "needs_input",
-                "topic": request.topic,
-                "questions": questions,
-                "instructions": "Answer these questions and resubmit with your answers in the 'notes' field.",
+            raw = result.content.strip()
+            lines = raw.split("\n", 2)
+            title = lines[0].strip()
+            body = lines[2].strip() if len(lines) >= 3 else (lines[1].strip() if len(lines) >= 2 else raw)
+            payload = {
+                "status": "ready",
+                "job_id": job_id,
+                "title": title,
+                "body": body,
+                "word_count": len(body.split()),
+                "grounded_in_memory": not context_is_thin,
             }
+            await _post_callback(payload)
+            return payload
 
-        # Step 3: Generate the post grounded in Wesley's actual content
-        kw_line = f"\nKeywords to work in naturally: {', '.join(request.keywords)}" if request.keywords else ""
-        notes_line = f"\nWesley's direct input on this topic:\n{request.notes}" if request.notes else ""
-        context_line = f"\n\nRelevant context from Wesley's existing content:\n{context}" if context.strip() else ""
+        except Exception as e:
+            payload = {"status": "error", "job_id": job_id, "detail": str(e)}
+            await _post_callback(payload)
+            return payload
 
-        prompt = (
-            f"Write a blog post for taskbullet.com in my voice.\n"
-            f"Topic: {request.topic}{kw_line}{notes_line}{context_line}\n"
-            f"Target length: ~{request.word_count} words.\n\n"
-            f"Ground the post in the real context and opinions above — don't invent takes I haven't expressed. "
-            f"Format: compelling title on line 1 (no 'Title:' prefix), blank line, then the post body. "
-            f"No meta-commentary. Just the title and post."
+    job_id = str(uuid.uuid4())
+
+    if request.callback_url:
+        # Async mode — return immediately, deliver result to callback when done
+        background_tasks.add_task(
+            lambda: asyncio.run(_run_generation(request, job_id, request.callback_url))
         )
-
-        result = await asyncio.wait_for(
-            loop.run_in_executor(None, lambda: llm.invoke([
-                SystemMessage(content=SYSTEM_PROMPT),
-                HumanMessage(content=prompt),
-            ])),
-            timeout=60,
-        )
-        raw = result.content.strip()
-        lines = raw.split("\n", 2)
-        title = lines[0].strip()
-        body = lines[2].strip() if len(lines) >= 3 else (lines[1].strip() if len(lines) >= 2 else raw)
-        return {
-            "status": "ready",
-            "title": title,
-            "body": body,
-            "word_count": len(body.split()),
-            "grounded_in_memory": not context_is_thin,
-        }
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="Blog generation timed out.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"status": "processing", "job_id": job_id}
+    else:
+        # Sync mode — wait and return directly
+        try:
+            result = await asyncio.wait_for(_run_generation(request, job_id, ""), timeout=90)
+            return result
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Blog generation timed out.")
 
 
 @app.post("/email/triage", dependencies=[Depends(verify_owner)])
