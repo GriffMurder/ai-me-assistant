@@ -118,5 +118,6 @@ yarl==1.23.0
 zstandard==0.25.0
 tzlocal==5.3.1
 APScheduler==3.11.2
+yt-dlp>=2025.1.1
 tzlocal==5.3.1
 twilio>=9.0.0

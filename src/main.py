@@ -523,6 +523,128 @@ async def transcribe_drive_videos(folder_id: str = "1InK4vWIsweRJzAzge3B2OagEO7U
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
+@app.post("/ingest-social-videos", dependencies=[Depends(verify_owner)])
+async def ingest_social_videos(
+    url: str,
+    label: str = "",
+    limit: int = 50,
+):
+    """Download audio from any social video page (Facebook, YouTube, Instagram, TikTok, etc.)
+    using yt-dlp, transcribe with Whisper, and store in RAG memory.
+
+    `url`   — page/channel/playlist URL or single video URL
+    `label` — tag stored with each transcript (e.g. 'taskbullet facebook reels')
+    `limit` — max number of videos to process (default 50)
+
+    Note: Facebook may require cookies for private/restricted content.
+    Public pages like facebook.com/TaskBullet/reels/ should work without auth.
+    """
+    try:
+        import tempfile
+        import yt_dlp
+        import openai
+
+        from src.tools.rag_upload import upload_note_from_text
+
+        WHISPER_MAX_BYTES = 24 * 1024 * 1024
+        CHUNK_SECS = 18 * 60
+        tag = label or url
+
+        oai = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        def _transcribe_path(path: str, name: str) -> str:
+            import math, subprocess
+            size = os.path.getsize(path)
+            if size <= WHISPER_MAX_BYTES:
+                with open(path, "rb") as fh:
+                    fh.name = name
+                    return oai.audio.transcriptions.create(model="whisper-1", file=fh).text
+            # Split into chunks
+            r = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", path],
+                capture_output=True, text=True, check=True,
+            )
+            duration = float(r.stdout.strip())
+            n_chunks = math.ceil(duration / CHUNK_SECS)
+            parts = []
+            for i in range(n_chunks):
+                chunk_path = path + f".chunk{i}.mp3"
+                subprocess.run(
+                    ["ffmpeg", "-i", path, "-ss", str(i * CHUNK_SECS),
+                     "-t", str(CHUNK_SECS), "-y", chunk_path],
+                    check=True, capture_output=True,
+                )
+                with open(chunk_path, "rb") as fh:
+                    fh.name = f"chunk{i}.mp3"
+                    parts.append(oai.audio.transcriptions.create(model="whisper-1", file=fh).text)
+                os.unlink(chunk_path)
+            return " ".join(parts)
+
+        transcribed = 0
+        errors = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "postprocessors": [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "32",
+                }],
+                "outtmpl": os.path.join(tmpdir, "%(id)s.%(ext)s"),
+                "quiet": True,
+                "no_warnings": True,
+                "playlistend": limit,
+                "ignoreerrors": True,   # skip unavailable videos
+                "extract_flat": False,
+            }
+
+            loop = asyncio.get_event_loop()
+
+            def _download_and_transcribe():
+                nonlocal transcribed
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+
+                entries = []
+                if info:
+                    if "entries" in info:
+                        entries = [e for e in info["entries"] if e]
+                    else:
+                        entries = [info]
+
+                for entry in entries:
+                    video_id = entry.get("id", "unknown")
+                    title = entry.get("title", video_id)
+                    audio_path = os.path.join(tmpdir, f"{video_id}.mp3")
+                    if not os.path.exists(audio_path):
+                        errors.append({"video": title, "error": "audio file not found after download"})
+                        continue
+                    try:
+                        text = _transcribe_path(audio_path, f"{video_id}.mp3")
+                        if text.strip():
+                            upload_note_from_text(text.strip(), title=f"{tag} — {title}")
+                            transcribed += 1
+                    except Exception as e:
+                        errors.append({"video": title, "error": str(e)})
+
+            await asyncio.wait_for(
+                loop.run_in_executor(None, _download_and_transcribe),
+                timeout=600,  # 10 min max for a batch
+            )
+
+        return {
+            "transcribed": transcribed,
+            "errors": errors,
+            "source_url": url,
+        }
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Social video ingest timed out (10 min limit).")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
+
+
 @app.post("/ingest-drive-folder", dependencies=[Depends(verify_owner)])
 async def ingest_drive_folder(folder_id: str, label: str = ""):
     """Read all Google Docs in a Drive folder and store them in long-term RAG memory.
