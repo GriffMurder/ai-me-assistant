@@ -599,6 +599,15 @@ async def ingest_social_videos(
                 def error(self, msg):
                     ydl_log.append(f"ERR: {msg}")
 
+            # Write YouTube cookies from env var if present
+            cookie_file: str | None = None
+            yt_cookies_b64 = os.environ.get("YOUTUBE_COOKIES_B64", "").strip()
+            if yt_cookies_b64:
+                import base64 as _b64
+                cookie_file = os.path.join(tmpdir, "yt_cookies.txt")
+                with open(cookie_file, "wb") as cf:
+                    cf.write(_b64.b64decode(yt_cookies_b64))
+
             ydl_opts = {
                 # Prefer m4a (native YouTube audio) so we don't need ffmpeg to
                 # convert — Whisper accepts m4a, webm, opus directly.
@@ -613,6 +622,7 @@ async def ingest_social_videos(
                 "extract_flat": False,
                 "writethumbnail": False,
                 "writeinfojson": True,
+                **({"cookiefile": cookie_file} if cookie_file else {}),
             }
 
             loop = asyncio.get_event_loop()
