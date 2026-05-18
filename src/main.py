@@ -92,6 +92,12 @@ class ChatRequest(BaseModel):
     message: str
     thread_id: str = None  # For memory persistence
 
+class BlogRequest(BaseModel):
+    topic: str
+    keywords: list[str] = []
+    notes: str = ""          # extra context/direction
+    word_count: int = 600    # target length
+
 @app.get("/ping")
 async def ping():
     """Public liveness check — call this first to wake the server before sending a chat message."""
@@ -126,6 +132,50 @@ async def chat(request: ChatRequest):
         "response": _sanitize_response(result["messages"][-1].content),
         "thread_id": thread_id
     }
+
+
+@app.post("/generate/blog", dependencies=[Depends(verify_owner)])
+async def generate_blog(request: BlogRequest):
+    """Generate a blog post in Wesley's voice.
+
+    Accepts a topic, optional keywords, optional notes/direction, and a target
+    word count. Returns the finished post as plain text plus a suggested title.
+    Intended for external apps (e.g. TaskBullet) to call via API.
+    """
+    from src.agent import SYSTEM_PROMPT
+    from langchain_xai import ChatXAI
+    from langchain_core.messages import SystemMessage, HumanMessage
+
+    kw_line = f"\nKeywords to work in naturally: {', '.join(request.keywords)}" if request.keywords else ""
+    notes_line = f"\nExtra direction: {request.notes}" if request.notes else ""
+
+    prompt = (
+        f"Write a blog post for my website in my voice.\n"
+        f"Topic: {request.topic}{kw_line}{notes_line}\n"
+        f"Target length: ~{request.word_count} words.\n\n"
+        f"Format: start with a compelling title on line 1 (no 'Title:' prefix), "
+        f"then a blank line, then the post body. No meta-commentary, no 'here is your post' framing. "
+        f"Just the title and post."
+    )
+
+    try:
+        llm = ChatXAI(model="grok-3-latest")
+        messages = [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
+        loop = asyncio.get_event_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, lambda: llm.invoke(messages)),
+            timeout=60,
+        )
+        raw = result.content.strip()
+        lines = raw.split("\n", 2)
+        title = lines[0].strip()
+        body = lines[2].strip() if len(lines) >= 3 else (lines[1].strip() if len(lines) >= 2 else raw)
+        return {"title": title, "body": body, "word_count": len(body.split())}
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Blog generation timed out. Try a shorter word count.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/email/triage", dependencies=[Depends(verify_owner)])
 async def trigger_email_triage():
