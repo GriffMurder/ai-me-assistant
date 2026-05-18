@@ -347,6 +347,85 @@ async def upload_note(file: UploadFile = File(...)):
     return {"chunks": chunks, "title": file.filename}
 
 
+@app.post("/transcribe-drive-videos", dependencies=[Depends(verify_owner)])
+async def transcribe_drive_videos(folder_id: str = "1InK4vWIsweRJzAzge3B2OagEO7U4Rb7R", label: str = "video transcript"):
+    """Download video/audio files from a Drive folder, transcribe with Whisper,
+    and store transcripts in RAG memory.
+
+    Defaults to Wesley's videos folder. Skips files over 24MB (Whisper API limit).
+    Returns a summary of what was transcribed.
+    """
+    try:
+        import io
+        import openai
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaIoBaseDownload
+        from src.auth.google_auth import DRIVE_READONLY_SCOPE, load_creds as _load_creds
+        from src.tools.rag_upload import upload_note_from_text
+
+        WHISPER_MAX_BYTES = 24 * 1024 * 1024  # 24 MB — Whisper API hard limit is 25 MB
+        AUDIO_VIDEO_MIMES = {
+            "video/mp4", "video/quicktime", "video/x-msvideo", "video/webm",
+            "audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/webm",
+        }
+
+        creds = _load_creds([DRIVE_READONLY_SCOPE])
+        svc = build("drive", "v3", credentials=creds, cache_discovery=False)
+
+        # List all video/audio files in folder
+        q = f"'{folder_id}' in parents and trashed = false"
+        results = svc.files().list(
+            q=q,
+            pageSize=50,
+            fields="files(id, name, mimeType, size)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        files = [f for f in results.get("files", []) if f.get("mimeType", "") in AUDIO_VIDEO_MIMES]
+
+        if not files:
+            return {"message": "No video/audio files found in that folder.", "transcribed": 0}
+
+        oai = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        transcribed = 0
+        skipped = []
+        errors = []
+
+        for f in files:
+            file_size = int(f.get("size", 0))
+            if file_size > WHISPER_MAX_BYTES:
+                skipped.append({"file": f["name"], "reason": f"Too large ({file_size // (1024*1024)} MB > 24 MB)"})
+                continue
+            try:
+                # Download into memory
+                buf = io.BytesIO()
+                request_dl = svc.files().get_media(fileId=f["id"], supportsAllDrives=True)
+                downloader = MediaIoBaseDownload(buf, request_dl)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+                buf.seek(0)
+                buf.name = f["name"]  # Whisper needs a filename with extension
+
+                # Transcribe
+                transcript = oai.audio.transcriptions.create(model="whisper-1", file=buf)
+                text = transcript.text.strip()
+                if text:
+                    n = upload_note_from_text(text, title=f"{label} — {f['name']}")
+                    transcribed += 1
+            except Exception as e:
+                errors.append({"file": f["name"], "error": str(e)})
+
+        return {
+            "transcribed": transcribed,
+            "skipped": skipped,
+            "errors": errors,
+            "files_found": [f["name"] for f in files],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
+
+
 @app.post("/ingest-drive-folder", dependencies=[Depends(verify_owner)])
 async def ingest_drive_folder(folder_id: str, label: str = ""):
     """Read all Google Docs in a Drive folder and store them in long-term RAG memory.
