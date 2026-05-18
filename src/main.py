@@ -596,31 +596,35 @@ async def ingest_social_videos(
                 "quiet": True,
                 "no_warnings": True,
                 "playlistend": limit,
-                "ignoreerrors": True,   # skip unavailable videos
+                "ignoreerrors": True,
                 "extract_flat": False,
+                # Build a title map so we can label transcripts properly
+                "writethumbnail": False,
+                "writeinfojson": True,   # write %(id)s.info.json so we can map id→title
             }
 
             loop = asyncio.get_event_loop()
 
             def _download_and_transcribe():
+                import glob, json as _json
                 nonlocal transcribed
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=True)
+                    ydl.extract_info(url, download=True)
 
-                entries = []
-                if info:
-                    if "entries" in info:
-                        entries = [e for e in info["entries"] if e]
-                    else:
-                        entries = [info]
-
-                for entry in entries:
-                    video_id = entry.get("id", "unknown")
-                    title = entry.get("title", video_id)
-                    audio_path = os.path.join(tmpdir, f"{video_id}.mp3")
-                    if not os.path.exists(audio_path):
-                        errors.append({"video": title, "error": "audio file not found after download"})
-                        continue
+                # Discover all .mp3 files that landed in tmpdir — handles nested
+                # channel playlists (Videos tab, Shorts tab, etc.) transparently
+                mp3_files = glob.glob(os.path.join(tmpdir, "*.mp3"))
+                for audio_path in mp3_files:
+                    video_id = os.path.splitext(os.path.basename(audio_path))[0]
+                    # Try to get a human title from the companion .info.json
+                    info_path = os.path.join(tmpdir, f"{video_id}.info.json")
+                    title = video_id
+                    if os.path.exists(info_path):
+                        try:
+                            with open(info_path) as fh:
+                                title = _json.load(fh).get("title", video_id)
+                        except Exception:
+                            pass
                     try:
                         text = _transcribe_path(audio_path, f"{video_id}.mp3")
                         if text.strip():
@@ -631,7 +635,7 @@ async def ingest_social_videos(
 
             await asyncio.wait_for(
                 loop.run_in_executor(None, _download_and_transcribe),
-                timeout=600,  # 10 min max for a batch
+                timeout=600,
             )
 
         return {
