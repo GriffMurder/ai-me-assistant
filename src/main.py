@@ -585,14 +585,29 @@ async def ingest_social_videos(
         errors = []
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            ydl_log: list[str] = []
+
+            class _YDLLogger:
+                def debug(self, msg):
+                    if msg.startswith("[debug]"):
+                        return
+                    ydl_log.append(msg)
+                def info(self, msg):
+                    ydl_log.append(msg)
+                def warning(self, msg):
+                    ydl_log.append(f"WARN: {msg}")
+                def error(self, msg):
+                    ydl_log.append(f"ERR: {msg}")
+
             ydl_opts = {
                 # Prefer m4a (native YouTube audio) so we don't need ffmpeg to
                 # convert — Whisper accepts m4a, webm, opus directly.
                 "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
                 # No postprocessors: skip FFmpegExtractAudio entirely
                 "outtmpl": os.path.join(tmpdir, "%(id)s.%(ext)s"),
-                "quiet": True,
-                "no_warnings": True,
+                "quiet": False,
+                "no_warnings": False,
+                "logger": _YDLLogger(),
                 "playlistend": limit,
                 "ignoreerrors": True,
                 "extract_flat": False,
@@ -644,6 +659,7 @@ async def ingest_social_videos(
             "transcribed": transcribed,
             "errors": errors,
             "source_url": url,
+            "ydl_log": ydl_log[-50:],  # last 50 lines for diagnosis; remove once stable
         }
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Social video ingest timed out (10 min limit).")
