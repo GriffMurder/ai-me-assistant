@@ -240,6 +240,64 @@ async def upload_note(file: UploadFile = File(...)):
     return {"chunks": chunks, "title": file.filename}
 
 
+@app.post("/ingest-drive-folder", dependencies=[Depends(verify_owner)])
+async def ingest_drive_folder(folder_id: str, label: str = ""):
+    """Read all Google Docs in a Drive folder and store them in long-term RAG memory.
+
+    Pass the bare folder ID from the Drive URL. Optionally set `label` to tag
+    the chunks (e.g. 'church talks'). Returns a summary of what was ingested.
+    """
+    from googleapiclient.discovery import build
+    from src.auth.google_auth import DRIVE_READONLY_SCOPE, DOCS_READONLY_SCOPE, load_creds as _load_creds
+    from src.tools.rag_upload import upload_note_from_text
+    from src.tools.google_docs import _doc_to_text
+
+    try:
+        drive_creds = _load_creds([DRIVE_READONLY_SCOPE])
+        drive_svc = build("drive", "v3", credentials=drive_creds, cache_discovery=False)
+        docs_creds = _load_creds([DOCS_READONLY_SCOPE])
+        docs_svc = build("docs", "v1", credentials=docs_creds, cache_discovery=False)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Auth error: {e}")
+
+    # List all Google Docs in the folder
+    q = (f"'{folder_id}' in parents and "
+         "mimeType = 'application/vnd.google-apps.document' and trashed = false")
+    results = drive_svc.files().list(
+        q=q,
+        pageSize=200,
+        fields="files(id, name)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+    ).execute()
+    files = results.get("files", [])
+    if not files:
+        return {"message": "No Google Docs found in that folder.", "ingested": 0, "total_chunks": 0}
+
+    ingested = 0
+    total_chunks = 0
+    errors = []
+    tag = label or folder_id
+    for f in files:
+        try:
+            doc = docs_svc.documents().get(documentId=f["id"]).execute()
+            text = _doc_to_text(doc)
+            if not text.strip():
+                continue
+            n = upload_note_from_text(text, title=f"{tag} — {f['name']}")
+            total_chunks += n
+            ingested += 1
+        except Exception as e:
+            errors.append({"file": f["name"], "error": str(e)})
+
+    return {
+        "ingested": ingested,
+        "total_chunks": total_chunks,
+        "skipped_errors": errors,
+        "files": [f["name"] for f in files],
+    }
+
+
 @app.get("/")
 async def root():
     """Serve the chat UI"""
