@@ -586,21 +586,18 @@ async def ingest_social_videos(
 
         with tempfile.TemporaryDirectory() as tmpdir:
             ydl_opts = {
-                "format": "bestaudio/best",
-                "postprocessors": [{
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "32",
-                }],
+                # Prefer m4a (native YouTube audio) so we don't need ffmpeg to
+                # convert — Whisper accepts m4a, webm, opus directly.
+                "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
+                # No postprocessors: skip FFmpegExtractAudio entirely
                 "outtmpl": os.path.join(tmpdir, "%(id)s.%(ext)s"),
                 "quiet": True,
                 "no_warnings": True,
                 "playlistend": limit,
                 "ignoreerrors": True,
                 "extract_flat": False,
-                # Build a title map so we can label transcripts properly
                 "writethumbnail": False,
-                "writeinfojson": True,   # write %(id)s.info.json so we can map id→title
+                "writeinfojson": True,
             }
 
             loop = asyncio.get_event_loop()
@@ -611,22 +608,27 @@ async def ingest_social_videos(
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.extract_info(url, download=True)
 
-                # Discover all .mp3 files that landed in tmpdir — handles nested
-                # channel playlists (Videos tab, Shorts tab, etc.) transparently
-                mp3_files = glob.glob(os.path.join(tmpdir, "*.mp3"))
-                for audio_path in mp3_files:
-                    video_id = os.path.splitext(os.path.basename(audio_path))[0]
-                    # Try to get a human title from the companion .info.json
-                    info_path = os.path.join(tmpdir, f"{video_id}.info.json")
-                    title = video_id
+                # Discover all audio files — m4a, webm, opus, mp3, etc.
+                audio_files = []
+                for pat in ("*.m4a", "*.webm", "*.opus", "*.mp3", "*.ogg", "*.wav"):
+                    audio_files.extend(glob.glob(os.path.join(tmpdir, pat)))
+
+                for audio_path in audio_files:
+                    base = os.path.splitext(os.path.basename(audio_path))[0]
+                    ext  = os.path.splitext(audio_path)[1].lstrip(".")
+                    # Skip info.json files mistakenly matched
+                    if base.endswith(".info"):
+                        continue
+                    info_path = os.path.join(tmpdir, f"{base}.info.json")
+                    title = base
                     if os.path.exists(info_path):
                         try:
                             with open(info_path) as fh:
-                                title = _json.load(fh).get("title", video_id)
+                                title = _json.load(fh).get("title", base)
                         except Exception:
                             pass
                     try:
-                        text = _transcribe_path(audio_path, f"{video_id}.mp3")
+                        text = _transcribe_path(audio_path, f"{base}.{ext}")
                         if text.strip():
                             upload_note_from_text(text.strip(), title=f"{tag} — {title}")
                             transcribed += 1
