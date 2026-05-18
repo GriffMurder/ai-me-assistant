@@ -363,11 +363,44 @@ async def transcribe_drive_videos(folder_id: str = "1InK4vWIsweRJzAzge3B2OagEO7U
         from src.auth.google_auth import DRIVE_READONLY_SCOPE, load_creds as _load_creds
         from src.tools.rag_upload import upload_note_from_text
 
+        import io
+        import subprocess
+        import tempfile
+        import math
+        import openai
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaIoBaseDownload
+        from src.auth.google_auth import DRIVE_READONLY_SCOPE, load_creds as _load_creds
+        from src.tools.rag_upload import upload_note_from_text
+
         WHISPER_MAX_BYTES = 24 * 1024 * 1024  # 24 MB — Whisper API hard limit is 25 MB
+        CHUNK_SECS = 18 * 60               # 18-minute chunks for long files
         AUDIO_VIDEO_MIMES = {
             "video/mp4", "video/quicktime", "video/x-msvideo", "video/webm",
             "audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/webm",
         }
+
+        def _extract_compressed_audio(src_path: str, dest_path: str):
+            """Use ffmpeg to extract mono 32kbps mp3 — keeps file small for Whisper."""
+            subprocess.run(
+                ["ffmpeg", "-i", src_path, "-vn", "-ar", "16000",
+                 "-ac", "1", "-b:a", "32k", "-y", dest_path],
+                check=True, capture_output=True,
+            )
+
+        def _get_duration(audio_path: str) -> float:
+            """Return duration in seconds via ffprobe."""
+            r = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
+                capture_output=True, text=True, check=True,
+            )
+            return float(r.stdout.strip())
+
+        def _transcribe_file(oai_client, path: str, filename: str) -> str:
+            with open(path, "rb") as fh:
+                fh.name = filename
+                return oai_client.audio.transcriptions.create(model="whisper-1", file=fh).text
 
         creds = _load_creds([DRIVE_READONLY_SCOPE])
         svc = build("drive", "v3", credentials=creds, cache_discovery=False)
@@ -375,11 +408,8 @@ async def transcribe_drive_videos(folder_id: str = "1InK4vWIsweRJzAzge3B2OagEO7U
         # List all video/audio files in folder
         q = f"'{folder_id}' in parents and trashed = false"
         results = svc.files().list(
-            q=q,
-            pageSize=50,
-            fields="files(id, name, mimeType, size)",
-            supportsAllDrives=True,
-            includeItemsFromAllDrives=True,
+            q=q, pageSize=50, fields="files(id, name, mimeType, size)",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
         ).execute()
         files = [f for f in results.get("files", []) if f.get("mimeType", "") in AUDIO_VIDEO_MIMES]
 
@@ -392,29 +422,59 @@ async def transcribe_drive_videos(folder_id: str = "1InK4vWIsweRJzAzge3B2OagEO7U
         errors = []
 
         for f in files:
-            file_size = int(f.get("size", 0))
-            if file_size > WHISPER_MAX_BYTES:
-                skipped.append({"file": f["name"], "reason": f"Too large ({file_size // (1024*1024)} MB > 24 MB)"})
-                continue
+            tmp_video = tmp_audio = None
             try:
-                # Download into memory
-                buf = io.BytesIO()
+                # Download video to temp file
+                ext = os.path.splitext(f["name"])[1] or ".mp4"
+                tmp_video = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
                 request_dl = svc.files().get_media(fileId=f["id"], supportsAllDrives=True)
-                downloader = MediaIoBaseDownload(buf, request_dl)
+                downloader = MediaIoBaseDownload(tmp_video, request_dl)
                 done = False
                 while not done:
                     _, done = downloader.next_chunk()
-                buf.seek(0)
-                buf.name = f["name"]  # Whisper needs a filename with extension
+                tmp_video.flush()
+                tmp_video_path = tmp_video.name
+                tmp_video.close()
 
-                # Transcribe
-                transcript = oai.audio.transcriptions.create(model="whisper-1", file=buf)
-                text = transcript.text.strip()
-                if text:
-                    n = upload_note_from_text(text, title=f"{label} — {f['name']}")
+                # Extract compressed audio
+                tmp_audio_path = tmp_video_path + ".mp3"
+                _extract_compressed_audio(tmp_video_path, tmp_audio_path)
+                audio_size = os.path.getsize(tmp_audio_path)
+
+                if audio_size <= WHISPER_MAX_BYTES:
+                    # Small enough — transcribe directly
+                    text = _transcribe_file(oai, tmp_audio_path, f["name"] + ".mp3")
+                else:
+                    # Too long — split into CHUNK_SECS chunks
+                    duration = _get_duration(tmp_audio_path)
+                    n_chunks = math.ceil(duration / CHUNK_SECS)
+                    parts = []
+                    for i in range(n_chunks):
+                        chunk_path = tmp_audio_path + f".chunk{i}.mp3"
+                        start = i * CHUNK_SECS
+                        subprocess.run(
+                            ["ffmpeg", "-i", tmp_audio_path, "-ss", str(start),
+                             "-t", str(CHUNK_SECS), "-y", chunk_path],
+                            check=True, capture_output=True,
+                        )
+                        parts.append(_transcribe_file(oai, chunk_path, f"chunk{i}.mp3"))
+                        os.unlink(chunk_path)
+                    text = " ".join(parts)
+
+                if text.strip():
+                    upload_note_from_text(text.strip(), title=f"{label} — {f['name']}")
                     transcribed += 1
+
             except Exception as e:
                 errors.append({"file": f["name"], "error": str(e)})
+            finally:
+                for p in [getattr(tmp_video, 'name', None),
+                          (tmp_video.name + ".mp3") if tmp_video else None]:
+                    if p and os.path.exists(p):
+                        try:
+                            os.unlink(p)
+                        except Exception:
+                            pass
 
         return {
             "transcribed": transcribed,
