@@ -672,6 +672,7 @@ async def ingest_social_videos(
             "transcribed": transcribed,
             "errors": errors,
             "source_url": url,
+            "cookies_loaded": cookie_file is not None,
             "ydl_log": ydl_log[-50:],  # last 50 lines for diagnosis; remove once stable
         }
     except asyncio.TimeoutError:
