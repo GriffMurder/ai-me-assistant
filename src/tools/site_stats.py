@@ -1,14 +1,12 @@
 """Tools for fetching live admin stats from Wesley's 4 business sites.
 
-Each site exposes GET /api/admin/stats protected by an `x-admin-key` header.
+Each site exposes GET /api/admin/stats protected by an Authorization: Bearer header.
 The shared secret is stored in env var ADMIN_STATS_KEY.
 
 Site URLs come from env vars: OPS_URL, TASKBULLET_URL, ORCARW_URL, RETURNFLOW_URL.
 Tools fail gracefully — they return a string explaining the problem instead of raising.
 """
 import os
-import json
-from typing import Optional
 
 import httpx
 from dotenv import load_dotenv
@@ -17,6 +15,23 @@ from langchain_core.tools import tool
 load_dotenv()
 
 _TIMEOUT = 10.0
+
+
+def _fmt_nested(data: dict) -> str:
+    """Format a potentially-nested stats response into readable lines."""
+    lines = []
+    for section, value in data.items():
+        if section in ("site", "generated_at"):
+            continue
+        if isinstance(value, dict):
+            lines.append(f"  [{section}]")
+            for k, v in value.items():
+                lines.append(f"    • {k}: {v}")
+        else:
+            lines.append(f"  • {section}: {value}")
+    if "generated_at" in data:
+        lines.append(f"  (as of {data['generated_at']})")
+    return "\n".join(lines)
 
 
 def _fetch_stats(site_label: str, url_env_var: str) -> str:
@@ -31,16 +46,20 @@ def _fetch_stats(site_label: str, url_env_var: str) -> str:
 
     url = base.rstrip("/") + "/api/admin/stats"
     try:
-        r = httpx.get(url, headers={"x-admin-key": key}, timeout=_TIMEOUT)
+        r = httpx.get(
+            url,
+            headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+            timeout=_TIMEOUT,
+        )
     except Exception as e:
         return f"❌ {site_label}: request failed ({type(e).__name__}: {e})"
 
-    if r.status_code == 401 or r.status_code == 403:
-        return f"❌ {site_label}: unauthorized (HTTP {r.status_code}) — ADMIN_STATS_KEY in Render doesn't match the key {site_label} expects. Update it in Render → Environment."
+    if r.status_code in (401, 403):
+        return f"❌ {site_label}: auth failed (HTTP {r.status_code}) — ADMIN_STATS_KEY in Render doesn't match the token {site_label} expects."
     if r.status_code == 404:
         return f"❌ {site_label}: /api/admin/stats not found — endpoint not deployed yet"
     if r.status_code >= 500:
-        return f"❌ {site_label}: server error {r.status_code} — {r.text[:200]}"
+        return f"❌ {site_label}: stats endpoint failed (HTTP {r.status_code}) — {r.text[:200]}"
     if r.status_code != 200:
         return f"❌ {site_label}: HTTP {r.status_code} — {r.text[:200]}"
 
@@ -49,15 +68,7 @@ def _fetch_stats(site_label: str, url_env_var: str) -> str:
     except Exception:
         return f"❌ {site_label}: response was not JSON"
 
-    # Pretty-format for the agent
-    lines = [f"📊 {site_label} stats:"]
-    for k, v in data.items():
-        if k in ("site", "generated_at"):
-            continue
-        lines.append(f"  • {k}: {v}")
-    if "generated_at" in data:
-        lines.append(f"  (as of {data['generated_at']})")
-    return "\n".join(lines)
+    return f"📊 {site_label} stats:\n{_fmt_nested(data)}"
 
 
 @tool
@@ -72,7 +83,16 @@ def get_ops_dashboard() -> str:
 
 @tool
 def get_taskbullet_stats() -> str:
-    """Get live signups and subscription stats from the public TaskBullet site (taskbullet.com)."""
+    """Get live billing, business, and traffic stats from TaskBullet (taskbullet.com).
+
+    Returns nested data including:
+    - billing: activeSubscriptions, trialingSubscriptions, pastDueSubscriptions, estimatedMrrUsd
+    - business: activeClients, payingClients, newPaidClients30d, leads30d, kickoffBookings30d,
+                leadToKickoffRate30d, activePlans, avgHoursSaved
+    - traffic: last7, last30, dataSource
+
+    Flag past-due subscriptions, weak lead-to-kickoff rate, or missing GA4 traffic data.
+    """
     return _fetch_stats("taskbullet.com", "TASKBULLET_URL")
 
 
