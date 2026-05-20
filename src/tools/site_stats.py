@@ -18,19 +18,39 @@ _TIMEOUT = 10.0
 
 
 def _fmt_nested(data: dict) -> str:
-    """Format a potentially-nested stats response into readable lines."""
+    """Format a potentially-nested stats response into readable lines.
+
+    Tolerant of both snake_case and camelCase field names (TaskBullet uses camelCase).
+    Handles traffic.last7/last30 as metric objects and activePlans as an array.
+    """
     lines = []
+    skip = {"site", "source", "generated_at", "generatedAt"}
+
     for section, value in data.items():
-        if section in ("site", "generated_at"):
+        if section in skip:
             continue
         if isinstance(value, dict):
             lines.append(f"  [{section}]")
             for k, v in value.items():
-                lines.append(f"    • {k}: {v}")
+                # traffic.last7 / traffic.last30 may be metric objects {sessions, users, ...}
+                if isinstance(v, dict):
+                    sessions = v.get("sessions", v.get("pageviews", "?"))
+                    lines.append(f"    • {k}: {sessions} sessions")
+                # activePlans is an array of plan objects
+                elif k == "activePlans" and isinstance(v, list):
+                    names = [p.get("name", str(p)) if isinstance(p, dict) else str(p) for p in v]
+                    lines.append(f"    • activePlans ({len(v)}): {', '.join(names)}")
+                else:
+                    lines.append(f"    • {k}: {v}")
+        elif isinstance(value, list):
+            lines.append(f"  • {section} ({len(value)}): {', '.join(str(i) for i in value[:5])}")
         else:
             lines.append(f"  • {section}: {value}")
-    if "generated_at" in data:
-        lines.append(f"  (as of {data['generated_at']})")
+
+    # Accept both snake_case and camelCase timestamp
+    ts = data.get("generatedAt") or data.get("generated_at")
+    if ts:
+        lines.append(f"  (as of {ts})")
     return "\n".join(lines)
 
 
@@ -85,11 +105,11 @@ def get_ops_dashboard() -> str:
 def get_taskbullet_stats() -> str:
     """Get live billing, business, and traffic stats from TaskBullet (taskbullet.com).
 
-    Returns nested data including:
+    Response uses camelCase. Key fields:
     - billing: activeSubscriptions, trialingSubscriptions, pastDueSubscriptions, estimatedMrrUsd
     - business: activeClients, payingClients, newPaidClients30d, leads30d, kickoffBookings30d,
-                leadToKickoffRate30d, activePlans, avgHoursSaved
-    - traffic: last7, last30, dataSource
+                leadToKickoffRate30d, activePlans (array of plan objects), avgHoursSaved
+    - traffic: last7 (metric object with .sessions), last30 (metric object with .sessions), dataSource
 
     Flag past-due subscriptions, weak lead-to-kickoff rate, or missing GA4 traffic data.
     """
