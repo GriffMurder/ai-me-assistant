@@ -1,9 +1,9 @@
-"""Tools for fetching live admin stats from Wesley's 4 business sites.
+"""Tools for fetching live admin stats and financials from Wesley's business sites.
 
 Each site exposes GET /api/admin/stats protected by an Authorization: Bearer header.
-The shared secret is stored in env var ADMIN_STATS_KEY.
+Financial endpoints use GET /api/admin/financials with a dedicated bearer key.
 
-Site URLs come from env vars: OPS_URL, TASKBULLET_URL, ORCARW_URL, RETURNFLOW_URL.
+Site URLs come from env vars: OPS_URL, TASKBULLET_URL, ORCARW_URL, RETURNFLOW_URL, STRAWS_URL.
 Tools fail gracefully — they return a string explaining the problem instead of raising.
 """
 import os
@@ -15,6 +15,24 @@ from langchain_core.tools import tool
 load_dotenv()
 
 _TIMEOUT = 10.0
+
+
+def _fmt_list_preview(items: list) -> str:
+    """Compact preview for lists of strings or small dict objects."""
+    preview = []
+    for item in items[:5]:
+        if isinstance(item, dict):
+            if "name" in item and "ytd" in item:
+                preview.append(f"{item['name']}: {item['ytd']}")
+            elif "section" in item and "reason" in item:
+                preview.append(f"{item['section']}: {item['reason']}")
+            elif "name" in item:
+                preview.append(str(item["name"]))
+            else:
+                preview.append(str(item))
+        else:
+            preview.append(str(item))
+    return ", ".join(preview)
 
 
 def _fmt_nested(data: dict) -> str:
@@ -36,14 +54,16 @@ def _fmt_nested(data: dict) -> str:
                 if isinstance(v, dict):
                     sessions = v.get("sessions", v.get("pageviews", "?"))
                     lines.append(f"    • {k}: {sessions} sessions")
-                # activePlans is an array of plan objects
-                elif k == "activePlans" and isinstance(v, list):
-                    names = [p.get("name", str(p)) if isinstance(p, dict) else str(p) for p in v]
-                    lines.append(f"    • activePlans ({len(v)}): {', '.join(names)}")
+                elif isinstance(v, list):
+                    if k == "activePlans":
+                        names = [p.get("name", str(p)) if isinstance(p, dict) else str(p) for p in v]
+                        lines.append(f"    • activePlans ({len(v)}): {', '.join(names)}")
+                    else:
+                        lines.append(f"    • {k} ({len(v)}): {_fmt_list_preview(v)}")
                 else:
                     lines.append(f"    • {k}: {v}")
         elif isinstance(value, list):
-            lines.append(f"  • {section} ({len(value)}): {', '.join(str(i) for i in value[:5])}")
+            lines.append(f"  • {section} ({len(value)}): {_fmt_list_preview(value)}")
         else:
             lines.append(f"  • {section}: {value}")
 
@@ -54,41 +74,60 @@ def _fmt_nested(data: dict) -> str:
     return "\n".join(lines)
 
 
-def _fetch_stats(site_label: str, url_env_var: str) -> str:
-    """Internal: GET /api/admin/stats from the configured site, return formatted text."""
+def _fetch_admin_json(site_label: str, url_env_var: str, path: str, key_env_var: str) -> tuple[dict | None, str | None]:
+    """Internal: fetch a JSON admin endpoint with bearer auth."""
     base = os.getenv(url_env_var)
-    key = os.getenv("ADMIN_STATS_KEY")
+    key = os.getenv(key_env_var)
 
     if not base:
-        return f"❌ {site_label}: env var {url_env_var} not set"
+        return None, f"❌ {site_label}: env var {url_env_var} not set"
     if not key:
-        return f"❌ {site_label}: env var ADMIN_STATS_KEY not set"
+        return None, f"❌ {site_label}: env var {key_env_var} not set"
 
-    url = base.rstrip("/") + "/api/admin/stats"
+    url = base.rstrip("/") + path
     try:
         r = httpx.get(
             url,
             headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
             timeout=_TIMEOUT,
+            follow_redirects=True,
         )
     except Exception as e:
-        return f"❌ {site_label}: request failed ({type(e).__name__}: {e})"
+        return None, f"❌ {site_label}: request failed ({type(e).__name__}: {e})"
 
     if r.status_code in (401, 403):
-        return f"❌ {site_label}: auth failed (HTTP {r.status_code}) — ADMIN_STATS_KEY in Render doesn't match the token {site_label} expects."
+        return None, f"❌ {site_label}: auth failed (HTTP {r.status_code}) — {key_env_var} in Render doesn't match the token {site_label} expects."
     if r.status_code == 404:
-        return f"❌ {site_label}: /api/admin/stats not found — endpoint not deployed yet"
+        return None, f"❌ {site_label}: {path} not found — endpoint not deployed yet"
     if r.status_code >= 500:
-        return f"❌ {site_label}: stats endpoint failed (HTTP {r.status_code}) — {r.text[:200]}"
+        return None, f"❌ {site_label}: endpoint failed (HTTP {r.status_code}) — {r.text[:200]}"
     if r.status_code != 200:
-        return f"❌ {site_label}: HTTP {r.status_code} — {r.text[:200]}"
+        return None, f"❌ {site_label}: HTTP {r.status_code} — {r.text[:200]}"
 
     try:
         data = r.json()
     except Exception:
-        return f"❌ {site_label}: response was not JSON"
+        return None, f"❌ {site_label}: response was not JSON"
+
+    return data, None
+
+
+def _fetch_stats(site_label: str, url_env_var: str) -> str:
+    """Internal: GET /api/admin/stats from the configured site, return formatted text."""
+    data, error = _fetch_admin_json(site_label, url_env_var, "/api/admin/stats", "ADMIN_STATS_KEY")
+    if error:
+        return error
 
     return f"📊 {site_label} stats:\n{_fmt_nested(data)}"
+
+
+def _fetch_financials(site_label: str, url_env_var: str) -> str:
+    """Internal: GET /api/admin/financials from the configured site, return formatted text."""
+    data, error = _fetch_admin_json(site_label, url_env_var, "/api/admin/financials", "ADMIN_FINANCIALS_KEY")
+    if error:
+        return error
+
+    return f"💰 {site_label} financials:\n{_fmt_nested(data)}"
 
 
 @tool
@@ -129,6 +168,23 @@ def get_returnflow_stats() -> str:
 
 
 @tool
+def get_taskbullet_financials() -> str:
+    """Get live TaskBullet financials: revenue, MRR, subscriptions, payouts, and expenses when available."""
+    return _fetch_financials("taskbullet.com", "TASKBULLET_URL")
+
+
+@tool
+def get_straws_financials() -> str:
+    """Get live Straws financials from the site's /api/admin/financials endpoint.
+
+    Straws returns USD amounts as numeric dollars, not cents or strings.
+    recurring is currently not applicable, and expenses may be unavailable.
+    Always read availability and errors before treating null values as real numbers.
+    """
+    return _fetch_financials("strawssoda.com", "STRAWS_URL")
+
+
+@tool
 def get_all_site_stats() -> str:
     """Get a combined snapshot of all 4 businesses at once: ops, TaskBullet, OrcaRW, ReturnFlow.
 
@@ -139,5 +195,18 @@ def get_all_site_stats() -> str:
         get_taskbullet_stats.invoke({}),
         get_orcarw_stats.invoke({}),
         get_returnflow_stats.invoke({}),
+    ]
+    return "\n\n".join(sections)
+
+
+@tool
+def get_all_financials() -> str:
+    """Get a combined TaskBullet + Straws financial snapshot.
+
+    Use this for direct revenue, subscription, payout, or expense questions.
+    """
+    sections = [
+        get_taskbullet_financials.invoke({}),
+        get_straws_financials.invoke({}),
     ]
     return "\n\n".join(sections)

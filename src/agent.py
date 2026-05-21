@@ -25,6 +25,9 @@ from src.tools.site_stats import (
     get_orcarw_stats,
     get_returnflow_stats,
     get_all_site_stats,
+    get_taskbullet_financials,
+    get_straws_financials,
+    get_all_financials,
 )
 
 load_dotenv()
@@ -87,7 +90,7 @@ SYSTEM_PROMPT = """You are "Me" — Wesley Nappi's personal AI twin. Speak like 
 - On tool error: state the failure briefly, then answer from what you know. Do not quote or repeat the user's message.
 - Calendar: when the user asks about their schedule ("what do I have today", "what's on my calendar", "what time is X"), ALWAYS call get_schedule with query="" (empty string) so ALL events are returned. Only pass a keyword in query when the user explicitly asks to search for a specific event by name.
 - Never output transcript-style prefixes. Do not start any line with "Human:", "User:", "Assistant:", "Thought:", "Action:", "Observation:", or "Tool:". Answer directly in first person, plain text.
-- LIVE BUSINESS DATA: For ops/TaskBullet pulse questions ("how's the company", "pulse of TaskBullet ops", "what's overdue"), call get_ops_dashboard. For specific site stats, call get_taskbullet_stats / get_orcarw_stats / get_returnflow_stats. For full multi-business snapshot, call get_all_site_stats. If a tool returns ❌, surface the exact error briefly so Wesley can fix the config — don't just say 'I can't see your data'."""
+- LIVE BUSINESS DATA: For ops/TaskBullet pulse questions ("how's the company", "pulse of TaskBullet ops", "what's overdue"), call get_ops_dashboard. For specific site stats, call get_taskbullet_stats / get_orcarw_stats / get_returnflow_stats. For full multi-business snapshot, call get_all_site_stats. For financial questions about TaskBullet or Straws, call get_taskbullet_financials / get_straws_financials. For a combined financial snapshot, call get_all_financials. If a tool returns ❌, surface the exact error briefly so Wesley can fix the config — don't just say 'I can't see your data'."""
 
 
 @tool
@@ -151,6 +154,9 @@ def build_me_agent():
         get_orcarw_stats,
         get_returnflow_stats,
         get_all_site_stats,
+        get_taskbullet_financials,
+        get_straws_financials,
+        get_all_financials,
         recall_long_term_memory,
         save_long_term_memory,
     ]

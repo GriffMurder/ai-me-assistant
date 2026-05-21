@@ -40,9 +40,13 @@ services:
         sync: false
       - key: TASKBULLET_URL
         sync: false
+      - key: STRAWS_URL
+        sync: false
       - key: ORCARW_URL
         sync: false
       - key: RETURNFLOW_URL
         sync: false
       - key: ADMIN_STATS_KEY
+        sync: false
+      - key: ADMIN_FINANCIALS_KEY
         sync: false
